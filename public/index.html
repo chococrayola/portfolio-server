@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#fe3c72" />
+  <title>Tinder Score</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Sticky header: live total + verdict -->
+  <header class="topbar">
+    <div class="topbar-row">
+      <h1 class="brand">🔥 Tinder Score</h1>
+      <button id="settingsToggle" class="icon-btn" aria-label="Settings">⚙️</button>
+    </div>
+    <div class="score-display">
+      <span id="totalScore" class="total">0</span>
+      <span id="verdict" class="verdict">—</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Category score cards rendered here -->
+    <section id="categories" class="categories"></section>
+
+    <div class="actions">
+      <button id="resetCurrent" class="btn btn-ghost">↺ Reset</button>
+      <button id="saveProfile" class="btn btn-primary">💾 Save &amp; Next</button>
+    </div>
+
+    <!-- History of rated profiles -->
+    <section class="history">
+      <div class="history-head">
+        <h2>History</h2>
+        <button id="clearHistory" class="link-btn">Clear</button>
+      </div>
+      <ul id="historyList" class="history-list"></ul>
+    </section>
+  </main>
+
+  <!-- Settings panel (hidden by default) -->
+  <div id="settingsOverlay" class="overlay hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Settings</h2>
+        <button id="settingsClose" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+
+      <label class="field">
+        <span>Swipe-right threshold</span>
+        <input id="thresholdInput" type="number" inputmode="numeric" />
+      </label>
+
+      <h3>Categories</h3>
+      <ul id="settingsCategories" class="settings-categories"></ul>
+
+      <div class="add-row">
+        <input id="newCatName" type="text" placeholder="New category name" />
+        <input id="newCatPoints" type="number" inputmode="numeric" placeholder="pts" />
+        <button id="addCategory" class="btn btn-primary">Add</button>
+      </div>
+
+      <button id="resetDefaults" class="btn btn-ghost full">Reset to defaults</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
