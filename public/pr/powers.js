@@ -12,9 +12,9 @@ import { TILE } from './map.js';
 export const POWERS = [
   {
     id: 'inspect',
-    label: 'Inspect',
+    label: 'Look',
     icon: '👆',
-    desc: 'Select / do nothing — just look around.',
+    desc: 'Drag to pan, pinch/scroll to zoom. (Two fingers pan & zoom with any tool.)',
     apply() {},
   },
   {
@@ -80,6 +80,53 @@ export const POWERS = [
     desc: 'A precise bolt from the heavens.',
     apply(world, x, y) {
       world.damageArea(x, y, 2, 60, '⚡ A bolt of lightning strikes!', false);
+    },
+  },
+  {
+    id: 'dragon',
+    label: 'Dragon',
+    icon: '🐉',
+    desc: 'Unleash a fire-breathing dragon on the area.',
+    apply(world, x, y) {
+      world.spawnDragon(x, y);
+    },
+  },
+  {
+    id: 'ufo',
+    label: 'UFO',
+    icon: '🛸',
+    desc: 'A flying saucer that abducts the locals.',
+    apply(world, x, y) {
+      world.spawnUfo(x, y);
+    },
+  },
+  {
+    id: 'volcano',
+    label: 'Volcano',
+    icon: '🌋',
+    desc: 'Raise a volcano that erupts with lava.',
+    apply(world, x, y) {
+      world.eruptVolcano(x, y);
+    },
+  },
+  {
+    id: 'tornado',
+    label: 'Tornado',
+    icon: '🌪️',
+    desc: 'Spawn a twister that roams and flings units.',
+    apply(world, x, y) {
+      world.spawnTornado(x, y);
+    },
+  },
+  {
+    id: 'wildlife',
+    label: 'Wildlife',
+    icon: '🐑',
+    desc: 'Drop a little flock of sheep (and a wolf or two).',
+    apply(world, x, y) {
+      const A = world.ANIMAL;
+      for (let i = 0; i < 5; i++) world.spawnAnimal(A.SHEEP, x, y);
+      world.spawnAnimal(A.WOLF, x, y);
     },
   },
   {
