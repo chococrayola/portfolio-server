@@ -1,16 +1,16 @@
 /* map.js — the Puerto Rico world.
  *
- * Generates a stylized but recognizable silhouette of Puerto Rico on a pixel
- * grid, complete with the Cordillera Central mountain spine, the El Yunque
- * rainforest in the northeast, the San Juan metro on the north coast, and the
- * offshore islands of Vieques and Culebra (plus a speck of Mona to the west).
- *
- * Everything downstream (sim, render, powers) treats the world as a flat
- * Uint8Array of tile types plus a handful of terrain modifier lookups.
+ * The island's shape and its 78 municipality regions come from real boundary
+ * data, rasterized into public/pr/municipios.js (see scratchpad rasterize.mjs).
+ * Here we turn that mask into a playable tile world: ocean vs. land, then a
+ * layer of terrain (the Cordillera Central spine, the El Yunque rainforest, the
+ * San Juan metro, and coastal beaches) painted on top of the real coastline.
  */
 
-export const COLS = 168;
-export const ROWS = 60;
+import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js';
+
+export const COLS = MCOLS;
+export const ROWS = MROWS;
 
 export const TILE = {
   OCEAN: 0,
@@ -22,7 +22,6 @@ export const TILE = {
   URBAN: 6,
 };
 
-// Base colors for each terrain (rendered as flat pixels).
 export const TILE_COLOR = {
   [TILE.OCEAN]: '#1c5e8c',
   [TILE.BEACH]: '#e6d59a',
@@ -34,7 +33,6 @@ export const TILE_COLOR = {
 };
 
 // --- Terrain gameplay modifiers ------------------------------------------
-// Movement points needed to enter a tile (higher = slower).
 export const MOVE_COST = {
   [TILE.OCEAN]: Infinity,
   [TILE.BEACH]: 1.0,
@@ -45,7 +43,6 @@ export const MOVE_COST = {
   [TILE.URBAN]: 0.9,
 };
 
-// How fast cities/population grow on this tile.
 export const GROWTH_MOD = {
   [TILE.OCEAN]: 0,
   [TILE.BEACH]: 1.0,
@@ -56,7 +53,6 @@ export const GROWTH_MOD = {
   [TILE.URBAN]: 1.5,
 };
 
-// Defensive multiplier for a unit standing on this tile.
 export const DEFENSE_MOD = {
   [TILE.OCEAN]: 1,
   [TILE.BEACH]: 0.9,
@@ -71,171 +67,131 @@ export const idx = (x, y) => y * COLS + x;
 export const inBounds = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
 export const isOcean = (t) => t === TILE.OCEAN;
 export const isLand = (t) => t !== TILE.OCEAN;
-// Tiles a city can be founded on (no mountains/forest/ocean).
 export const isBuildable = (t) =>
   t === TILE.GRASS || t === TILE.BEACH || t === TILE.HILL || t === TILE.URBAN;
-// Terrain that gives the Independentistas their guerrilla edge.
 export const isRough = (t) => t === TILE.MOUNTAIN || t === TILE.FOREST;
 
-// Deterministic value-noise so the same seed yields the same island.
+// Deterministic value-noise so a given seed yields the same terrain.
 function makeNoise(seed) {
   return (x, y) => {
     const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 0.137) * 43758.5453;
-    return n - Math.floor(n); // 0..1
+    return n - Math.floor(n);
   };
 }
 function fbm(noise, x, y) {
-  let v = 0;
-  let a = 0.5;
-  let f = 0.09;
-  for (let i = 0; i < 4; i++) {
-    v += a * noise(x * f, y * f);
-    a *= 0.5;
-    f *= 2.0;
-  }
-  return v; // ~0..0.93
+  let v = 0, a = 0.5, f = 0.09;
+  for (let i = 0; i < 4; i++) { v += a * noise(x * f, y * f); a *= 0.5; f *= 2.0; }
+  return v;
 }
 
 /**
- * Build the world.
- * @param {number} seed
- * @returns {{tiles: Uint8Array, regions: object, starts: Array}}
+ * Build the world from the real municipality mask.
+ * @returns {{tiles, municipioId, muniNames, muniAbbr, muniCentroids, regions, starts}}
  */
 export function generateMap(seed = 7) {
   const noise = makeNoise(seed);
   const tiles = new Uint8Array(COLS * ROWS).fill(TILE.OCEAN);
 
-  // Main island geometry: an elongated rounded rectangle (~3:1), shifted left
-  // to leave sea room for Vieques/Culebra on the east.
-  const cx = COLS * 0.455;
-  const cy = ROWS * 0.52;
-  const hw = COLS * 0.435;
-  const hh = ROWS * 0.33;
+  // Land = any cell that belongs to a municipality.
+  for (let i = 0; i < MGRID.length; i++) {
+    if (MGRID[i] !== OCEAN_ID) tiles[i] = TILE.GRASS;
+  }
 
-  const inMain = (x, y) => {
-    const nx = (x - cx) / hw;
-    const ny = (y - cy) / hh;
-    const wob = (fbm(noise, x + 11, y + 7) - 0.5) * 0.32;
-    return Math.pow(Math.abs(nx), 4) + Math.pow(Math.abs(ny), 2.3) + wob < 1.0;
-  };
+  // San Juan metro (real centroid) anchors the north-coast urban + the NE.
+  const sjIdx = NAMES.indexOf('San Juan');
+  const sj = sjIdx >= 0 ? CENTROIDS[sjIdx] : [Math.round(COLS * 0.6), Math.round(ROWS * 0.2)];
 
-  // Small offshore island helper (filled ellipse).
-  const stampIsland = (ecx, ecy, rx, ry) => {
-    for (let y = Math.floor(ecy - ry); y <= ecy + ry; y++) {
-      for (let x = Math.floor(ecx - rx); x <= ecx + rx; x++) {
-        if (!inBounds(x, y)) continue;
-        const dx = (x - ecx) / rx;
-        const dy = (y - ecy) / ry;
-        if (dx * dx + dy * dy <= 1) tiles[idx(x, y)] = TILE.GRASS;
-      }
-    }
-  };
-
-  // Lay down the main island as grass first.
+  // Elevation pass: a central E–W ridge (Cordillera Central), biased slightly
+  // south, becomes mountains; the flanks become hills.
+  const ridgeRow = ROWS * 0.55;
+  const spread = ROWS * 0.17;
   for (let y = 0; y < ROWS; y++) {
+    const ridge = Math.exp(-Math.pow((y - ridgeRow) / spread, 2));
     for (let x = 0; x < COLS; x++) {
-      if (inMain(x, y)) tiles[idx(x, y)] = TILE.GRASS;
+      if (tiles[idx(x, y)] === TILE.OCEAN) continue;
+      // keep the small eastern islands (Vieques/Culebra) low and flat
+      const elev = ridge * 0.82 + fbm(noise, x + 99, y + 51) * 0.5;
+      if (elev > 0.9) tiles[idx(x, y)] = TILE.MOUNTAIN;
+      else if (elev > 0.66) tiles[idx(x, y)] = TILE.HILL;
     }
   }
 
-  // Offshore islands (east) + a speck of Mona (far west).
-  const culebra = { x: cx + hw * 1.0, y: cy - hh * 0.62 };
-  const vieques = { x: cx + hw * 1.03, y: cy + hh * 0.18 };
-  stampIsland(culebra.x, culebra.y, 2.4, 1.8);
-  stampIsland(vieques.x, vieques.y, 4.2, 1.7);
-  stampIsland(cx - hw * 1.12, cy + hh * 0.05, 1.6, 1.4); // Mona
-
-  // Elevation pass: ridge band (slightly south of center) becomes mountains.
+  // El Yunque rainforest — northeast of San Juan, inland.
+  const eyx = sj[0] + COLS * 0.09;
+  const eyy = sj[1] + ROWS * 0.16;
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       if (tiles[idx(x, y)] === TILE.OCEAN) continue;
-      const ny = (y - cy) / hh;
-      const ridge = Math.exp(-Math.pow((ny + 0.12) / 0.34, 2));
-      const elev = ridge * 0.8 + fbm(noise, x + 99, y + 51) * 0.55;
-      if (elev > 0.86) tiles[idx(x, y)] = TILE.MOUNTAIN;
-      else if (elev > 0.62) tiles[idx(x, y)] = TILE.HILL;
+      const d = Math.hypot((x - eyx) / (COLS * 0.07), (y - eyy) / (ROWS * 0.16));
+      if (d < 1 && fbm(noise, x + 7, y + 200) > 0.4) tiles[idx(x, y)] = TILE.FOREST;
     }
   }
 
-  // El Yunque rainforest — northeast quadrant cluster.
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (tiles[idx(x, y)] === TILE.OCEAN) continue;
-      const nx = (x - cx) / hw;
-      const ny = (y - cy) / hh;
-      if (nx > 0.42 && nx < 0.82 && ny > -0.85 && ny < -0.1) {
-        if (fbm(noise, x + 7, y + 200) > 0.42) tiles[idx(x, y)] = TILE.FOREST;
-      }
-    }
-  }
-
-  // Beaches: land tiles touching the ocean (don't carve up the highlands).
+  // Beaches: land tiles touching the ocean.
   const snapshot = tiles.slice();
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      const t = snapshot[idx(x, y)];
-      if (t !== TILE.GRASS && t !== TILE.HILL) continue;
-      let coast = false;
+      const tt = snapshot[idx(x, y)];
+      if (tt !== TILE.GRASS && tt !== TILE.HILL) continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nxp = x + dx;
-        const nyp = y + dy;
-        if (!inBounds(nxp, nyp) || snapshot[idx(nxp, nyp)] === TILE.OCEAN) {
-          coast = true;
+        const nx = x + dx, ny = y + dy;
+        if (!inBounds(nx, ny) || snapshot[idx(nx, ny)] === TILE.OCEAN) {
+          tiles[idx(x, y)] = TILE.BEACH;
           break;
         }
       }
-      if (coast) tiles[idx(x, y)] = TILE.BEACH;
     }
   }
 
-  // San Juan metro: a small urban block on the north-central coast.
-  const sjX = Math.round(cx);
-  let sjY = 0;
-  for (let y = 0; y < ROWS; y++) {
-    if (tiles[idx(sjX, y)] !== TILE.OCEAN) { sjY = y; break; }
-  }
-  for (let dy = 0; dy < 3; dy++) {
+  // San Juan urban block on the real San Juan centroid.
+  for (let dy = -1; dy <= 2; dy++) {
     for (let dx = -2; dx <= 2; dx++) {
-      const x = sjX + dx;
-      const y = sjY + dy;
-      if (inBounds(x, y) && tiles[idx(x, y)] !== TILE.OCEAN) {
-        tiles[idx(x, y)] = TILE.URBAN;
-      }
+      const x = sj[0] + dx, y = sj[1] + dy;
+      if (inBounds(x, y) && tiles[idx(x, y)] !== TILE.OCEAN) tiles[idx(x, y)] = TILE.URBAN;
     }
   }
 
   const regions = {
-    sanJuan: { x: sjX, y: sjY + 1 },
-    elYunque: { x: Math.round(cx + hw * 0.6), y: Math.round(cy - hh * 0.4) },
-    culebra,
-    vieques,
-    cordillera: { x: Math.round(cx), y: Math.round(cy + hh * 0.15) },
+    sanJuan: { x: sj[0], y: sj[1] },
+    elYunque: { x: Math.round(eyx), y: Math.round(eyy) },
   };
 
-  // Balanced starting anchors in three separate regions (west / east / south).
+  // Balanced starting anchors spread west / east / central across the main island.
   const starts = [
-    { x: Math.round(cx - hw * 0.62), y: Math.round(cy + hh * 0.05) }, // west
-    { x: Math.round(cx + hw * 0.6), y: Math.round(cy - hh * 0.15) }, // east
-    { x: Math.round(cx - hw * 0.02), y: Math.round(cy + hh * 0.5) }, // south
+    { x: Math.round(COLS * 0.13), y: Math.round(ROWS * 0.55) }, // west (Mayagüez side)
+    { x: Math.round(COLS * 0.70), y: Math.round(ROWS * 0.45) }, // east
+    { x: Math.round(COLS * 0.40), y: Math.round(ROWS * 0.6) },  // central mountains
   ].map((p) => nearestLand(tiles, p.x, p.y));
 
-  return { tiles, regions, starts };
+  return {
+    tiles,
+    municipioId: MGRID,
+    muniNames: NAMES,
+    muniAbbr: ABBR,
+    muniCentroids: CENTROIDS,
+    regions,
+    starts,
+  };
 }
 
-// Spiral out from (x,y) to the closest buildable land tile.
+// Spiral out to the closest buildable land tile.
 export function nearestLand(tiles, x, y) {
   if (inBounds(x, y) && isBuildable(tiles[idx(x, y)])) return { x, y };
   for (let r = 1; r < Math.max(COLS, ROWS); r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (inBounds(nx, ny) && isBuildable(tiles[idx(nx, ny)])) {
-          return { x: nx, y: ny };
-        }
+        const nx = x + dx, ny = y + dy;
+        if (inBounds(nx, ny) && isBuildable(tiles[idx(nx, ny)])) return { x: nx, y: ny };
       }
     }
   }
   return { x, y };
 }
+
+// Look up which municipio a tile belongs to (255 = ocean).
+export function municipioAt(x, y) {
+  if (!inBounds(x, y)) return OCEAN_ID;
+  return MGRID[idx(x, y)];
+}
+export { NAMES as MUNI_NAMES, ABBR as MUNI_ABBR, CENTROIDS as MUNI_CENTROIDS, OCEAN_ID };
