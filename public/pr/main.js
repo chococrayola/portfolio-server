@@ -73,9 +73,21 @@ function buildWorld() {
 }
 
 // ---- Game loop -----------------------------------------------------------
-function loop() {
+// Speed slider (1..8) maps to a real ticks-per-second rate, decoupled from the
+// 60fps render loop, so 1x is genuinely watchable and 8x is a fast-forward.
+const TPS = [6, 10, 15, 22, 30, 42, 56, 75];
+const tps = () => TPS[Math.max(0, Math.min(TPS.length - 1, speed - 1))];
+let tickAcc = 0;
+let lastTime = performance.now();
+
+function loop(now) {
+  const dt = Math.min(0.25, (now - lastTime) / 1000); // clamp big gaps
+  lastTime = now;
   if (running && world.winner === null) {
-    for (let i = 0; i < speed; i++) world.step();
+    tickAcc += dt * tps();
+    let budget = Math.min(tickAcc | 0, 120); // cap catch-up per frame
+    tickAcc -= budget;
+    while (budget-- > 0 && world.winner === null) world.step();
   }
   renderer.draw();
   $('tickVal').textContent = world.tick;
@@ -131,10 +143,20 @@ function renderStats() {
 function renderLog() {
   const el = $('eventLog');
   el.innerHTML = '';
-  for (const e of world.events.slice(0, 60)) {
+  for (const e of world.events.slice(0, 90)) {
     const li = document.createElement('li');
     const color = e.civ != null ? world.civs[e.civ].color : 'var(--muted)';
-    li.innerHTML = `<span class="t">${e.tick}</span><span style="border-left:3px solid ${color};padding-left:6px">${e.text}</span>`;
+    // tick reads as an in-world "year" for flavor
+    const year = 'Año ' + e.tick;
+    const text = document.createElement('span');
+    text.textContent = e.text; // textContent avoids HTML injection from names
+    text.style.borderLeft = `3px solid ${color}`;
+    text.style.paddingLeft = '6px';
+    const t = document.createElement('span');
+    t.className = 't';
+    t.textContent = year;
+    li.appendChild(t);
+    li.appendChild(text);
     el.appendChild(li);
   }
 }
@@ -263,7 +285,7 @@ $('resetBtn').addEventListener('click', () => {
 });
 $('speed').addEventListener('input', (e) => {
   speed = Number(e.target.value);
-  $('speedVal').textContent = speed + '×';
+  $('speedVal').textContent = speed + '× · ' + tps() + '/s';
   localStorage.setItem(STORAGE.speed, String(speed));
 });
 
@@ -284,7 +306,7 @@ $('resetTraits').addEventListener('click', () => {
 
 // ---- Init ----------------------------------------------------------------
 $('speed').value = speed;
-$('speedVal').textContent = speed + '×';
+$('speedVal').textContent = speed + '× · ' + tps() + '/s';
 buildWorld();
 renderTools();
 updatePlayBtn();

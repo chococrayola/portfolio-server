@@ -13,20 +13,23 @@
 import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
+  municipioAt, MUNI_NAMES,
 } from './map.js';
 import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX } from './civs.js';
 
-// --- Tunables -------------------------------------------------------------
-const MAX_UNITS = 1400;
-const MAX_CITIES = 52;
-const MIN_CITY_DIST = 7;
-const UNIT_SPEED = 0.55;
+// --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
+const MAX_UNITS = 2200;
+const MAX_CITIES = 44;
+const MIN_CITY_DIST = 12;
+const UNIT_SPEED = 0.7;
 const RETARGET_EVERY = 12;
 const TERRITORY_EVERY = 6;
 const WAR_THRESHOLD = 32;
 const PEACE_THRESHOLD = 62;
-const DOMINANCE = 0.55; // fraction of land owned to win
-const EVENT_CAP = 120;
+const DOMINANCE = 0.48; // fraction of land owned to win
+const EVENT_CAP = 160;
+const SUMMARY_EVERY = 240; // "State of the Island" cadence
+const RAZE_CHANCE = 0.35; // chance a fallen city is razed instead of captured
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -162,16 +165,20 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     const used = new Set(t.cities.map((c) => c.name));
     let name = CITY_NAMES[(rng() * CITY_NAMES.length) | 0];
     if (used.has(name)) name = name + ' ' + (t.nextCityId);
+    const muni = MUNI_NAMES[municipioAt(x, y)] || 'la costa';
     const city = {
       id: t.nextCityId++,
       civ: civIndex,
       x,
       y,
       pop: startPop,
-      hp: 34,
-      maxHp: 34,
+      hp: 26,
+      maxHp: 26,
       name,
+      muni,
       loyalty: 100,
+      besieged: false,
+      siegeBy: new Array(N).fill(0),
     };
     t.cities.push(city);
     return city;
@@ -183,7 +190,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     for (let i = 0; i < N; i++) {
       const s = starts[i % starts.length];
       const city = foundCity(i, s.x, s.y, 8);
-      if (city) log(`🏙️ ${t.civs[i].name} found their first city, ${city.name}.`, i);
+      if (city) log(`🏙️ ${t.civs[i].name} found their capital ${city.name} in ${city.muni}.`, i);
       for (let k = 0; k < 6; k++) spawnUnit(i, s.x, s.y);
     }
     recomputeTerritory();
@@ -371,7 +378,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (d < MIN_CITY_DIST) return;
     }
     const city = foundCity(unit.civ, unit.x, unit.y, 5);
-    if (city) log(`🏘️ ${c.name} settle the town of ${city.name}.`, unit.civ);
+    if (city) log(`🏘️ ${c.name} settle ${city.name} in ${city.muni}.`, unit.civ);
   }
 
   function siegeAdjacent(unit) {
@@ -381,8 +388,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (!inBounds(nx, ny)) continue;
       const city = cityAt(nx, ny);
       if (city && city.civ !== unit.civ && t.war[unit.civ][city.civ]) {
-        city.hp -= attackPower(unit) * 0.9;
+        city.hp -= attackPower(unit) * 0.9 * t.momentum[unit.civ];
         city.besieged = true;
+        city.siegeBy[unit.civ]++;
         adjustRel(unit.civ, city.civ, -0.2);
       }
     }
@@ -425,8 +433,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       const city = t.cities[i];
       const c = t.civs[city.civ];
       const tile = t.tiles[idx(city.x, city.y)];
-      // Growth.
-      city.pop += 0.045 * c.traits.growth * GROWTH_MOD[tile];
+      // Growth (the territorial leader's economy snowballs via momentum).
+      city.pop += 0.045 * c.traits.growth * GROWTH_MOD[tile] * t.momentum[city.civ];
       if (city.pop > 45) city.pop = 45;
       // Spawn a citizen when ripe.
       if (city.pop >= 7 && t.units.length < MAX_UNITS) {
@@ -438,15 +446,29 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       }
       // Regenerate only when not under active siege.
       if (!city.besieged && city.hp < city.maxHp) city.hp += 0.3;
-      city.besieged = false;
-      // Destroyed?
+      // Fallen city: captured by its strongest besieger, or razed.
       if (city.hp <= 0) {
-        log(`💥 ${c.name}'s city of ${city.name} has been sacked!`, city.civ);
-        // Free its tile's claim.
-        t.owner[idx(city.x, city.y)] = -1;
-        t.cities.splice(i, 1);
-        continue;
+        let captor = -1;
+        let best = 0;
+        for (let k = 0; k < N; k++) {
+          if (k !== city.civ && city.siegeBy[k] > best) { best = city.siegeBy[k]; captor = k; }
+        }
+        if (captor >= 0 && rng() > RAZE_CHANCE) {
+          log(`🚩 ${t.civs[captor].name} captured ${city.name} (${city.muni}) from ${c.name}!`, captor);
+          city.civ = captor;
+          city.hp = city.maxHp * 0.5;
+          city.pop = Math.max(3, city.pop * 0.5);
+          city.loyalty = 55;
+          t.owner[idx(city.x, city.y)] = captor;
+        } else {
+          log(`💥 ${c.name}'s city of ${city.name} (${city.muni}) was sacked and burned!`, city.civ);
+          t.owner[idx(city.x, city.y)] = -1;
+          t.cities.splice(i, 1);
+          continue;
+        }
       }
+      city.besieged = false;
+      city.siegeBy.fill(0);
       updateLoyalty(city);
     }
   }
@@ -540,16 +562,16 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
     for (let i = 0; i < N; i++) t.stats[i].pop = Math.round(t.stats[i].pop + t.stats[i].units);
 
-    // Momentum: whoever is ahead on territory fights a little harder, so small
-    // leads snowball into decisive wins instead of frozen stalemates.
+    // Momentum: rank the living civs by territory; the leader fights and grows
+    // harder, last place weaker. This "rich get richer" pressure reliably
+    // breaks the symmetric three-way stalemate and drives games to a winner,
+    // while the leader (and thus the eventual victor) is decided by who got
+    // ahead — which is driven by their traits.
     const alive = [];
     for (let i = 0; i < N; i++) if (t.stats[i].cities > 0 || t.stats[i].units > 0) alive.push(i);
-    const fair = 1 / Math.max(1, alive.length);
-    const land = t.landCount || 1;
-    for (let i = 0; i < N; i++) {
-      const share = t.stats[i].territory / land;
-      t.momentum[i] = Math.max(0.7, Math.min(1.45, 1 + (share - fair) * 1.6));
-    }
+    for (let i = 0; i < N; i++) t.momentum[i] = 1;
+    alive.sort((a, b) => t.stats[b].territory - t.stats[a].territory);
+    alive.forEach((ci, rank) => { t.momentum[ci] = Math.max(0.6, 1.8 - rank * 0.55); });
   }
 
   // ---- Diplomacy --------------------------------------------------------
@@ -571,11 +593,21 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
           const busy = anyWar(i) || anyWar(j);
           if (reckless || !busy || rng() < 0.2) {
             t.war[i][j] = t.war[j][i] = true;
-            log(`⚔️ ${ci.name} declare war on ${t.civs[j].name}!`);
+            const aggressor = ci.traits.aggression >= t.civs[j].traits.aggression ? i : j;
+            const other = aggressor === i ? j : i;
+            const reasons = [
+              'over disputed borderlands',
+              'after a bitter status referendum',
+              'in a clash of ideologies',
+              'over a corruption feud',
+              'after talks collapsed',
+            ];
+            const why = reasons[(rng() * reasons.length) | 0];
+            log(`⚔️ ${t.civs[aggressor].name} declare war on ${t.civs[other].name} ${why}!`, aggressor);
           }
         } else if (atWar && t.rel[i][j] > PEACE_THRESHOLD) {
           t.war[i][j] = t.war[j][i] = false;
-          log(`🕊️ ${ci.name} and ${t.civs[j].name} sign a truce.`);
+          log(`🕊️ ${ci.name} and ${t.civs[j].name} lay down arms and sign a truce.`);
         }
       }
     }
@@ -641,6 +673,27 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
   }
 
+  // ---- Periodic "State of the Island" summary ---------------------------
+  function shortName(i) { return t.civs[i].name.replace('Los ', ''); }
+  function summarize() {
+    const land = t.landCount || 1;
+    let leader = 0;
+    for (let i = 1; i < N; i++) if (t.stats[i].territory > t.stats[leader].territory) leader = i;
+    const parts = [];
+    for (let i = 0; i < N; i++) {
+      const pct = Math.round((t.stats[i].territory / land) * 100);
+      const pop = t.stats[i].pop >= 1000 ? (t.stats[i].pop / 1000).toFixed(1) + 'k' : t.stats[i].pop;
+      parts.push(`${shortName(i)} ${pop}·${t.stats[i].cities}c·${pct}%`);
+    }
+    const wars = [];
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+      if (t.war[i][j]) wars.push(`${shortName(i)}–${shortName(j)}`);
+    }
+    const warTxt = wars.length ? ` · at war: ${wars.join(', ')}` : ' · uneasy peace';
+    const ldPct = Math.round((t.stats[leader].territory / land) * 100);
+    log(`📊 Estado de la Isla — ${shortName(leader)} lead (${ldPct}%). ${parts.join(' · ')}${warTxt}.`, leader);
+  }
+
   // ---- Main tick --------------------------------------------------------
   function step() {
     if (t.winner !== null) return;
@@ -659,6 +712,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       recomputeStats();
       checkWinner();
     }
+    if (t.tick % SUMMARY_EVERY === 0 && t.winner === null) summarize();
   }
   world.step = step;
 

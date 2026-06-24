@@ -80,7 +80,8 @@ body {
   padding: 16px;
   align-items: start;
 }
-@media (max-width: 860px) {
+/* Give the map the full width on tablets/phones; sidebar drops below it. */
+@media (max-width: 1100px) {
   .layout { grid-template-columns: 1fr; }
 }
 
