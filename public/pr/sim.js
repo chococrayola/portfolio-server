@@ -62,10 +62,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     stats: civs.map(() => ({ pop: 0, units: 0, cities: 0, territory: 0 })),
     momentum: civs.map(() => 1), // territory leaders fight harder (snowball)
     events: [],
+    animals: [], // ambient wildlife (sheep/wolf/fish/bird)
+    effects: [], // transient hazards (dragon/ufo/volcano/tornado)
     winner: null,
     landCount: 0,
     nextUnitId: 1,
     nextCityId: 1,
+    nextAnimalId: 1,
     reviveCount: 0,
   };
 
@@ -193,6 +196,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (city) log(`🏙️ ${t.civs[i].name} found their capital ${city.name} in ${city.muni}.`, i);
       for (let k = 0; k < 6; k++) spawnUnit(i, s.x, s.y);
     }
+    seedAnimals();
     recomputeTerritory();
     recomputeStats();
   }
@@ -653,6 +657,226 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
   }
 
+  // ---- Wildlife (ambient ecosystem) -------------------------------------
+  // type: 0 sheep, 1 wolf, 2 fish, 3 bird
+  const ANIMAL = { SHEEP: 0, WOLF: 1, FISH: 2, BIRD: 3 };
+  const ANIMAL_CAP = [260, 44, 220, 48];
+
+  function countAnimals(type) {
+    let n = 0;
+    for (const a of t.animals) if (a.type === type) n++;
+    return n;
+  }
+
+  function spawnAnimal(type, x, y) {
+    if (countAnimals(type) >= ANIMAL_CAP[type]) return null;
+    if (!inBounds(x, y)) return null;
+    const wantWater = type === ANIMAL.FISH;
+    const onWater = isOcean(t.tiles[idx(x, y)]);
+    if (type !== ANIMAL.BIRD && wantWater !== onWater) {
+      // nudge to a suitable nearby tile
+      const spot = wantWater ? nearestWater(x, y) : nearestLandFree(x, y);
+      if (!spot) return null;
+      x = spot.x; y = spot.y;
+    }
+    const a = {
+      id: t.nextAnimalId++,
+      type,
+      x, y,
+      hp: type === ANIMAL.WOLF ? 8 : 4,
+      food: 6,
+      age: 0,
+      maxAge: 500 + ((rng() * 400) | 0),
+    };
+    t.animals.push(a);
+    return a;
+  }
+  world.spawnAnimal = spawnAnimal;
+  world.ANIMAL = ANIMAL;
+
+  function nearestWater(x, y) {
+    for (let r = 1; r < 24; r++) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (inBounds(nx, ny) && isOcean(t.tiles[idx(nx, ny)])) return { x: nx, y: ny };
+      }
+    }
+    return null;
+  }
+  function nearestLandFree(x, y) {
+    for (let r = 0; r < 24; r++) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (inBounds(nx, ny) && isLand(t.tiles[idx(nx, ny)])) return { x: nx, y: ny };
+      }
+    }
+    return null;
+  }
+
+  function seedAnimals() {
+    for (let i = 0; i < 90; i++) {
+      const x = (rng() * COLS) | 0, y = (rng() * ROWS) | 0;
+      if (isLand(t.tiles[idx(x, y)])) spawnAnimal(ANIMAL.SHEEP, x, y);
+    }
+    for (let i = 0; i < 14; i++) {
+      const x = (rng() * COLS) | 0, y = (rng() * ROWS) | 0;
+      if (isLand(t.tiles[idx(x, y)])) spawnAnimal(ANIMAL.WOLF, x, y);
+    }
+    for (let i = 0; i < 120; i++) {
+      const x = (rng() * COLS) | 0, y = (rng() * ROWS) | 0;
+      if (isOcean(t.tiles[idx(x, y)])) spawnAnimal(ANIMAL.FISH, x, y);
+    }
+    for (let i = 0; i < 20; i++) spawnAnimal(ANIMAL.BIRD, (rng() * COLS) | 0, (rng() * ROWS) | 0);
+  }
+
+  function wanderStep(a, preferWater) {
+    // pick a random adjacent tile of the right element
+    const dx = ((rng() * 3) | 0) - 1;
+    const dy = ((rng() * 3) | 0) - 1;
+    const nx = a.x + dx, ny = a.y + dy;
+    if (!inBounds(nx, ny)) return;
+    const ocean = isOcean(t.tiles[idx(nx, ny)]);
+    if (a.type === ANIMAL.BIRD || ocean === preferWater) { a.x = nx; a.y = ny; }
+  }
+
+  function updateAnimals() {
+    const dead = [];
+    for (let i = 0; i < t.animals.length; i++) {
+      const a = t.animals[i];
+      a.age++;
+      if (a.age > a.maxAge || a.hp <= 0) { dead.push(i); continue; }
+      // movement (throttled per animal)
+      if ((t.tick + a.id) % 2 === 0) {
+        if (a.type === ANIMAL.WOLF) {
+          const prey = nearestSheep(a, 6);
+          if (prey) {
+            a.x += Math.sign(prey.x - a.x);
+            a.y += Math.sign(prey.y - a.y);
+            if (Math.abs(prey.x - a.x) <= 1 && Math.abs(prey.y - a.y) <= 1) {
+              prey.hp = 0; a.food = Math.min(14, a.food + 6);
+            }
+          } else wanderStep(a, false);
+        } else {
+          wanderStep(a, a.type === ANIMAL.FISH);
+        }
+      }
+      // hunger / breeding (cheap, occasional)
+      if ((t.tick + a.id) % 24 === 0) {
+        a.food -= 1;
+        if (a.food <= 0) { dead.push(i); continue; }
+        const breeds = a.type === ANIMAL.SHEEP || a.type === ANIMAL.FISH
+          ? a.food > 4 && rng() < 0.25
+          : a.food > 9 && rng() < 0.2;
+        if (breeds) { a.food -= 3; spawnAnimal(a.type, a.x, a.y); }
+        if (a.type === ANIMAL.SHEEP && isLand(t.tiles[idx(a.x, a.y)])) a.food = Math.min(8, a.food + 2);
+      }
+    }
+    if (dead.length) {
+      const set = new Set(dead);
+      t.animals = t.animals.filter((_, i) => !set.has(i));
+    }
+  }
+
+  function nearestSheep(a, r) {
+    let best = null, bd = r * r + 1;
+    for (const s of t.animals) {
+      if (s.type !== ANIMAL.SHEEP || s.hp <= 0) continue;
+      const d = (s.x - a.x) ** 2 + (s.y - a.y) ** 2;
+      if (d < bd) { bd = d; best = s; }
+    }
+    return best;
+  }
+
+  // ---- Transient effects (god-power toys) -------------------------------
+  // kind: 'dragon' | 'ufo' | 'tornado' | 'volcano'
+  function addEffect(e) { t.effects.push(e); }
+
+  world.spawnDragon = function (x, y) {
+    addEffect({ kind: 'dragon', x: 0, y: Math.max(0, y - 10), tx: x, ty: y, ttl: 150, t: 0 });
+    log('🐉 A dragon descends upon the island!');
+  };
+  world.spawnUfo = function (x, y) {
+    addEffect({ kind: 'ufo', x, y, ttl: 150, t: 0 });
+    log('🛸 A UFO appears, beaming up the locals!');
+  };
+  world.spawnTornado = function (x, y) {
+    addEffect({ kind: 'tornado', x, y, vx: (rng() - 0.5) * 1.4, vy: (rng() - 0.5) * 1.4, ttl: 240, t: 0 });
+    log('🌪️ A tornado tears across the land!');
+  };
+  world.eruptVolcano = function (x, y) {
+    world.terraform(x, y, 1, TILE.MOUNTAIN);
+    addEffect({ kind: 'volcano', x, y, ttl: 120, t: 0 });
+    log('🌋 A volcano erupts, spewing lava!');
+  };
+
+  function cullAt(cx, cy, r) {
+    // remove animals within radius (used by disasters / effects)
+    if (!t.animals.length) return;
+    t.animals = t.animals.filter((a) => Math.hypot(a.x - cx, a.y - cy) > r);
+  }
+  world._cullAnimals = cullAt;
+
+  function abductNear(cx, cy, r) {
+    // remove one nearby unit or animal
+    for (let ai = 0; ai < t.units.length; ai++) {
+      const u = t.units[ai];
+      if (u && !deadUnits.has(ai) && Math.hypot(u.x - cx, u.y - cy) <= r) { killUnit(ai); return true; }
+    }
+    for (let i = 0; i < t.animals.length; i++) {
+      if (Math.hypot(t.animals[i].x - cx, t.animals[i].y - cy) <= r) {
+        t.animals.splice(i, 1); return true;
+      }
+    }
+    return false;
+  }
+
+  function updateEffects() {
+    let dirty = false;
+    for (let i = t.effects.length - 1; i >= 0; i--) {
+      const e = t.effects[i];
+      e.t++;
+      e.ttl--;
+      if (e.kind === 'dragon') {
+        // fly toward target, then circle and breathe fire
+        const ang = e.t * 0.18;
+        const dxx = e.tx + Math.cos(ang) * 6 - e.x;
+        const dyy = e.ty + Math.sin(ang) * 6 - e.y;
+        e.x += dxx * 0.12; e.y += dyy * 0.12;
+        if (e.t % 3 === 0) hitArea(e.x, e.y, 2.4, 6);
+      } else if (e.kind === 'ufo') {
+        e.x += Math.sin(e.t * 0.08) * 0.6;
+        if (e.t % 6 === 0) abductNear(e.x, e.y, 3);
+      } else if (e.kind === 'tornado') {
+        e.x += e.vx; e.y += e.vy;
+        if (e.x < 2 || e.x > COLS - 2) e.vx *= -1;
+        if (e.y < 2 || e.y > ROWS - 2) e.vy *= -1;
+        e.vx += (rng() - 0.5) * 0.3; e.vy += (rng() - 0.5) * 0.3;
+        e.vx = Math.max(-1.6, Math.min(1.6, e.vx));
+        e.vy = Math.max(-1.6, Math.min(1.6, e.vy));
+        if (e.t % 2 === 0) hitArea(e.x, e.y, 2.0, 5);
+      } else if (e.kind === 'volcano') {
+        const r = 1 + e.t * 0.05;
+        if (e.t % 4 === 0) { hitArea(e.x, e.y, Math.min(6, r), 7); dirty = true; }
+      }
+      if (e.ttl <= 0) t.effects.splice(i, 1);
+    }
+    if (dirty) { recomputeTerritory(); recomputeStats(); }
+  }
+
+  // damage units, cities and animals in a small area (used by live effects)
+  function hitArea(cx, cy, r, dmg) {
+    for (let ai = 0; ai < t.units.length; ai++) {
+      const u = t.units[ai];
+      if (!u || deadUnits.has(ai)) continue;
+      if (Math.hypot(u.x - cx, u.y - cy) <= r) { u.hp -= dmg; if (u.hp <= 0) killUnit(ai); }
+    }
+    for (const city of t.cities) if (Math.hypot(city.x - cx, city.y - cy) <= r) city.hp -= dmg * 0.6;
+    cullAt(cx, cy, r);
+    compactUnits();
+  }
+
   // ---- Win check --------------------------------------------------------
   function checkWinner() {
     const alive = [];
@@ -704,6 +928,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
     compactUnits();
     updateCities();
+    updateAnimals();
+    updateEffects();
     updateDiplomacy();
     maybeFlavorEvent();
     maybeRevive();
@@ -741,6 +967,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         }
       }
     }
+    cullAt(cx, cy, r);
     compactUnits();
     if (label) log(label + (casualties ? ` (${casualties} dead)` : ''));
     recomputeTerritory();

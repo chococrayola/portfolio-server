@@ -207,7 +207,7 @@ function applyTool(clientX, clientY) {
   const p = POWER_BY_ID[tool];
   if (!p || p.id === 'inspect') return;
   p.apply(world, x, y, selectedCiv);
-  if (['land', 'water', 'mountain', 'forest', 'meteor', 'hurricane'].includes(tool)) {
+  if (['land', 'water', 'mountain', 'forest', 'meteor', 'hurricane', 'volcano'].includes(tool)) {
     renderer.markTerrainDirty();
   }
   renderer.draw();
@@ -215,16 +215,65 @@ function applyTool(clientX, clientY) {
   renderLog();
 }
 
-// ---- Pointer handling (click + paint-drag) -------------------------------
-let painting = false;
+// ---- Pointer handling: 1 finger = tool (or pan with Inspect),
+//      2 fingers = pinch-zoom + pan; mouse wheel = zoom. -------------------
+const pointers = new Map();
+let pinch = null;
+let lastSingle = null;
+
+function pinchState() {
+  const ps = [...pointers.values()];
+  const a = ps[0], b = ps[1];
+  return { dist: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 };
+}
+
 canvas.addEventListener('pointerdown', (e) => {
-  painting = true;
-  applyTool(e.clientX, e.clientY);
+  canvas.setPointerCapture?.(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) {
+    lastSingle = { x: e.clientX, y: e.clientY };
+    if (tool !== 'inspect') applyTool(e.clientX, e.clientY);
+  } else if (pointers.size === 2) {
+    pinch = pinchState();
+    lastSingle = null;
+  }
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (painting && PAINTABLE.has(tool)) applyTool(e.clientX, e.clientY);
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size >= 2) {
+    const ns = pinchState();
+    if (pinch) {
+      if (pinch.dist > 0) renderer.zoomAtClient(ns.midX, ns.midY, ns.dist / pinch.dist);
+      renderer.panByClient(ns.midX - pinch.midX, ns.midY - pinch.midY);
+    }
+    pinch = ns;
+  } else if (pointers.size === 1) {
+    if (tool === 'inspect') {
+      if (lastSingle) renderer.panByClient(e.clientX - lastSingle.x, e.clientY - lastSingle.y);
+      lastSingle = { x: e.clientX, y: e.clientY };
+    } else if (PAINTABLE.has(tool)) {
+      applyTool(e.clientX, e.clientY);
+    }
+  }
 });
-window.addEventListener('pointerup', () => { painting = false; });
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (pointers.size === 0) lastSingle = null;
+  else { const p = [...pointers.values()][0]; lastSingle = { x: p.x, y: p.y }; }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  renderer.zoomAtClient(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 0.89);
+}, { passive: false });
+
+// Zoom buttons (desktop fallback).
+$('zoomIn').addEventListener('click', () => renderer.zoomByCenter(1.3));
+$('zoomOut').addEventListener('click', () => renderer.zoomByCenter(0.77));
+$('zoomFit').addEventListener('click', () => renderer.fit());
 
 // ---- Trait editor --------------------------------------------------------
 function renderTraitEditor() {

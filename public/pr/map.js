@@ -22,14 +22,15 @@ export const TILE = {
   URBAN: 6,
 };
 
+// Warmer, higher-contrast WorldBox-ish biome palette.
 export const TILE_COLOR = {
-  [TILE.OCEAN]: '#1c5e8c',
-  [TILE.BEACH]: '#e6d59a',
-  [TILE.GRASS]: '#6aa84f',
-  [TILE.HILL]: '#4e7d3a',
-  [TILE.MOUNTAIN]: '#7a6a55',
-  [TILE.FOREST]: '#2f6b32',
-  [TILE.URBAN]: '#9aa0a6',
+  [TILE.OCEAN]: '#2a82bd',
+  [TILE.BEACH]: '#efdca0',
+  [TILE.GRASS]: '#7cc24f',
+  [TILE.HILL]: '#5b9a3d',
+  [TILE.MOUNTAIN]: '#8a7a64',
+  [TILE.FOREST]: '#2f7a3a',
+  [TILE.URBAN]: '#b3b9bf',
 };
 
 // --- Terrain gameplay modifiers ------------------------------------------
