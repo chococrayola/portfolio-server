@@ -59,8 +59,14 @@ function escapeHtml(str = '') {
 function popupHtml(place) {
   const cat = getCategory(place.category);
   const { lat, lng } = place;
+  // Directions use exact coordinates (precise even for remote spots with no
+  // Google listing). "Ver en el mapa" searches by name so Google shows the
+  // place card when it knows the spot.
+  const nameQuery = encodeURIComponent(
+    [place.name, place.municipio, 'Puerto Rico'].filter(Boolean).join(', ')
+  );
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-  const view = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const view = `https://www.google.com/maps/search/?api=1&query=${nameQuery}`;
 
   const rows = [];
   if (place.municipio) {
