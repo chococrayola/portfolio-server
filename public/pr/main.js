@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=17';
-import { defaultCivs } from './civs.js?v=17';
-import { createWorld } from './sim.js?v=17';
-import { createRenderer } from './render.js?v=17';
-import { POWERS, POWER_BY_ID } from './powers.js?v=17';
-import { avatarDataURL } from './avatar.js?v=17';
+import { generateMap } from './map.js?v=18';
+import { defaultCivs } from './civs.js?v=18';
+import { createWorld } from './sim.js?v=18';
+import { createRenderer } from './render.js?v=18';
+import { POWERS, POWER_BY_ID } from './powers.js?v=18';
+import { avatarDataURL } from './avatar.js?v=18';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -236,6 +236,7 @@ function renderStats() {
           <div class="ruler">👑 <span></span></div>
         </div>
       </div>
+      <div class="card-status">${world.leaderStatus(i)}</div>
       <div class="row"><span>Población</span><span>${s.pop}</span></div>
       <div class="row"><span>Ciudades</span><span>${s.cities}</span></div>
       <div class="row"><span>Territorio</span><span>${pct}%</span></div>
@@ -281,7 +282,7 @@ function unitBuckets(fn, B = 10) {
   let max = 1;
   for (const u of world.units) { const v = fn(u); if (v > max) max = v; }
   for (const u of world.units) buckets[Math.min(B - 1, Math.floor((fn(u) / (max + 1)) * B))]++;
-  return buckets;
+  return { buckets, max };
 }
 
 function buildCharts() {
@@ -316,7 +317,7 @@ function renderCharts() {
     else if (d.kind === 'lineOne') drawLines(x, W, H, data.map((v) => [v]), ['#f4b942']);
     else if (d.kind === 'bars') drawBars(x, W, H, data, colors);
     else if (d.kind === 'donut') drawDonut(x, W, H, data, colors);
-    else if (d.kind === 'hist') drawBarsSimple(x, W, H, data, '#f4b942');
+    else if (d.kind === 'hist') drawHist(x, W, H, data.buckets, '#f4b942', Math.floor(data.max / 5));
   }
 }
 
@@ -337,6 +338,14 @@ function drawLines(x, W, H, samples, colors) {
     });
     x.stroke();
   }
+  scaleLabel(x, W, 'máx ' + (max >= 1000 ? (max / 1000).toFixed(1) + 'k' : max));
+}
+
+function scaleLabel(x, W, text) {
+  x.fillStyle = '#8fa0b0';
+  x.font = '8px system-ui, sans-serif';
+  x.textAlign = 'left';
+  x.fillText(text, 3, 9);
 }
 
 function drawBars(x, W, H, values, colors) {
@@ -344,24 +353,31 @@ function drawBars(x, W, H, values, colors) {
   const bw = W / values.length;
   const zeroY = H - 12;
   for (let i = 0; i < values.length; i++) {
-    const bh = (Math.abs(values[i]) / max) * (zeroY - 2);
+    const bh = (Math.abs(values[i]) / max) * (zeroY - 14);
     x.fillStyle = colors[i] || '#888';
     x.fillRect(i * bw + 2, zeroY - bh, bw - 4, bh);
-    x.fillStyle = '#aeb8c2';
+    x.fillStyle = '#cdd6df';
     x.font = '8px system-ui, sans-serif';
     x.textAlign = 'center';
     x.fillText(String(values[i]), i * bw + bw / 2, H - 3);
   }
+  scaleLabel(x, W, 'máx ' + max);
 }
 
-function drawBarsSimple(x, W, H, buckets, color) {
+// Histograma con números: cuenta máxima (eje Y) y rango de edad (eje X).
+function drawHist(x, W, H, buckets, color, maxYears) {
   const max = Math.max(1, ...buckets);
   const bw = W / buckets.length;
   for (let i = 0; i < buckets.length; i++) {
-    const bh = (buckets[i] / max) * (H - 4);
+    const bh = (buckets[i] / max) * (H - 22);
     x.fillStyle = color;
-    x.fillRect(i * bw + 1, H - bh, bw - 2, bh);
+    x.fillRect(i * bw + 1, H - 12 - bh, bw - 2, bh);
   }
+  scaleLabel(x, W, 'máx ' + max);
+  x.fillStyle = '#8fa0b0';
+  x.font = '8px system-ui, sans-serif';
+  x.textAlign = 'left'; x.fillText('0a', 2, H - 2);
+  x.textAlign = 'right'; x.fillText((maxYears || 0) + 'a', W - 2, H - 2);
 }
 
 function drawDonut(x, W, H, values, colors) {
@@ -565,10 +581,23 @@ function renderInspector() {
     const name = u.isLeader ? u.rulerName : u.name;
     const av = avatarDataURL(u.isLeader ? c.leader : (u.name + u.id), c.color, { crown: u.isLeader, size: 52 });
     const dead = u.dead ? `<div class="idead">† Cayó en combate</div>` : '';
+    const status = u.isLeader
+      ? `<div class="istatus">${world.leaderStatus(u.civ)}</div>` : '';
     const reign = u.isLeader
       ? `<div class="irow"><span>Reinado</span><span>${years(world.tick - u.since)} años</span></div>` +
         `<div class="irow"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[u.civ] : 0}</span></div>`
       : '';
+    // historial de bajas del líder
+    let killHist = '';
+    if (u.isLeader && u.killLog && u.killLog.length) {
+      const items = u.killLog.slice().reverse().map((k) => {
+        const ec = world.civs[k.civ];
+        return `<li>⚔ <b style="color:${ec.color}">${k.name}</b> <span class="dim">(${ec.name.replace('Los ', '')})</span></li>`;
+      }).join('');
+      killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas</div><ul>${items}</ul></div>`;
+    } else if (u.isLeader) {
+      killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas</div><div class="dim">Aún sin bajas.</div></div>`;
+    }
     body.innerHTML = `
       <div class="ihead">
         <img class="iface-img" alt="" src="${av}" />
@@ -577,6 +606,7 @@ function renderInspector() {
           <div class="ipart">${u.isLeader ? title + ' · ' : 'Ciudadano/a · '}${c.name}</div>
         </div>
       </div>
+      ${status}
       ${dead}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
       <div class="irow"><span>En el partido</span><span>${years(world.tick - u.joined)} años</span></div>
@@ -584,6 +614,7 @@ function renderInspector() {
       ${bar(u.hp / u.maxHp, '#3fd96b')}
       <div class="irow"><span>Bajas</span><span>⚔ ${u.kills}</span></div>
       ${reign}
+      ${killHist}
     `;
     body.querySelector('.iname').textContent = name;
   } else {
