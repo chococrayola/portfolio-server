@@ -1,14 +1,11 @@
-/* civs.js — the three civilizations.
+/* civs.js — los partidos.
  *
- * Each civ maps a real Puerto Rican political party onto a set of game traits.
- * The traits are grounded in the parties' actual positions (statehood vs.
- * commonwealth vs. independence, relative size, history) but tuned for a
- * satirical sandbox: Los PNP are loud, brutal, and not the sharpest machetes
- * in the cane field; Los PPD are the deal-making establishment; and Los
- * Independentistas are the brainy underdog who fight like the devil in the
- * mountains.
+ * Cada partido mapea una fuerza política real de Puerto Rico a un conjunto de
+ * rasgos de juego. Los rasgos se basan en las posiciones reales (estadidad,
+ * estado libre asociado, independencia, anticorrupción, etc.) pero ajustados
+ * para un sandbox satírico. Todo el juego está en español.
  *
- * Traits are on a 0..10 scale and are read by the simulation each tick.
+ * Rasgos en escala 0..10; el motor los lee en cada turno.
  */
 
 export const CIVS = [
@@ -16,70 +13,87 @@ export const CIVS = [
     id: 'pnp',
     name: 'Los PNP',
     full: 'Partido Nuevo Progresista',
-    motto: '¡Estadidad ya!', // statehood now
-    color: '#1f6fde', // blue
+    leader: 'Jenniffer González',
+    title: 'Gobernadora',
+    motto: '¡Estadidad ya!',
+    color: '#1f6fde',
     colorDark: '#1550a0',
     founded: 1967,
-    traits: {
-      aggression: 9, // quick to start fights
-      brutality: 9, // hit hard, take no prisoners
-      intelligence: 2, // ...not a lot going on upstairs
-      expansion: 8, // annex everything in sight
-      growth: 7, // big base
-      diplomacy: 2, // can't read the room
-      resilience: 5,
-    },
-    specials: { coastBonus: true }, // "Anexión": drawn to the coast (join the mainland)
-    blurb: 'Statehood hardliners. Most numerous, most brutal, least clever. ' +
-      'They annex first and ask questions never.',
+    start: { units: 8, cityPop: 12 },
+    traits: { aggression: 9, brutality: 9, intelligence: 2, expansion: 8, growth: 7, diplomacy: 2, resilience: 5 },
+    specials: { coastBonus: true },
+    blurb: 'Estadistas de línea dura. Los más numerosos, los más brutales y los ' +
+      'menos astutos. Anexan primero y preguntan nunca.',
   },
   {
     id: 'ppd',
     name: 'Los PPD',
     full: 'Partido Popular Democrático',
-    motto: 'Pan, Tierra y Libertad', // bread, land, liberty
-    color: '#d6322e', // red
+    leader: 'Pablo José Hernández',
+    title: 'Líder',
+    motto: 'Pan, Tierra y Libertad',
+    color: '#d6322e',
     colorDark: '#9c211e',
     founded: 1938,
-    traits: {
-      aggression: 5,
-      brutality: 4,
-      intelligence: 6,
-      expansion: 6,
-      growth: 8, // strong machine, big turnout
-      diplomacy: 9, // masters of the deal and the status quo
-      resilience: 6,
-    },
-    specials: { holdBonus: true }, // "Status Quo": tougher while defending held ground
-    blurb: 'The commonwealth establishment. Status-quo machine politicians who ' +
-      'grow fast, defend well, and would rather make a deal than a war.',
+    start: { units: 8, cityPop: 12 },
+    traits: { aggression: 5, brutality: 4, intelligence: 6, expansion: 6, growth: 8, diplomacy: 9, resilience: 6 },
+    specials: { holdBonus: true },
+    blurb: 'El establishment del Estado Libre Asociado. Maquinaria política del ' +
+      'statu quo: crecen rápido, defienden bien y prefieren un pacto a una guerra.',
+  },
+  {
+    id: 'mvc',
+    name: 'Victoria Ciudadana',
+    full: 'Movimiento Victoria Ciudadana',
+    leader: 'Manuel Natal',
+    title: 'Líder',
+    motto: 'Contra la corrupción y el bipartidismo',
+    color: '#7d3cc9',
+    colorDark: '#5a2a93',
+    founded: 2019,
+    start: { units: 5, cityPop: 8 },
+    traits: { aggression: 4, brutality: 2, intelligence: 9, expansion: 5, growth: 6, diplomacy: 8, resilience: 7 },
+    specials: { recruiter: true }, // atrae a los librepensadores
+    blurb: 'Movimiento progresista y anticorrupción que rompe el bipartidismo. ' +
+      'Idealistas, brillantes y magnéticos para los indecisos.',
   },
   {
     id: 'ind',
     name: 'Los Independentistas',
     full: 'Partido Independentista Puertorriqueño',
-    motto: '¡Que viva Puerto Rico libre!', // long live a free PR
-    color: '#23a455', // green
+    leader: 'Juan Dalmau',
+    title: 'Líder',
+    motto: '¡Que viva Puerto Rico libre!',
+    color: '#23a455',
     colorDark: '#177a3c',
     founded: 1946,
-    traits: {
-      aggression: 4,
-      brutality: 3,
-      intelligence: 9, // the brains of the operation
-      expansion: 4,
-      growth: 5,
-      diplomacy: 6,
-      resilience: 9, // never truly defeated
-    },
-    specials: { guerrilla: true, revive: true }, // jungle/mountain edge + La Resistencia
-    blurb: 'The independence underdog. Small but brilliant and impossible to ' +
-      'stamp out — deadly in the mountains and the rainforest.',
+    start: { units: 5, cityPop: 8 },
+    traits: { aggression: 4, brutality: 3, intelligence: 9, expansion: 4, growth: 5, diplomacy: 6, resilience: 9 },
+    specials: { guerrilla: true, revive: true },
+    blurb: 'La independencia indomable. Pocos pero brillantes e imposibles de ' +
+      'exterminar — letales en la montaña y el bosque.',
+  },
+  {
+    id: 'molina',
+    name: 'Eliezer Molina',
+    full: 'Candidatura Independiente',
+    leader: 'Eliezer Molina',
+    title: 'Candidato',
+    motto: 'El pueblo contra la clase política',
+    color: '#e6892b',
+    colorDark: '#b5651a',
+    founded: 2020,
+    start: { units: 2, cityPop: 5 },
+    traits: { aggression: 6, brutality: 3, intelligence: 6, expansion: 3, growth: 3, diplomacy: 8, resilience: 8 },
+    specials: { viral: true, lone: true }, // un solo hombre, pero viral
+    blurb: 'Un solo hombre contra todos. Agricultor y outsider populista sin ' +
+      'maquinaria, pero viral y combativo: convence multitudes desde cero.',
   },
 ];
 
 export const CIV_INDEX = Object.fromEntries(CIVS.map((c, i) => [c.id, i]));
 
-// City name pools, vaguely flavored per civ.
+// Nombres de municipios para bautizar ciudades.
 export const CITY_NAMES = [
   'Bayamón', 'Caguas', 'Ponce', 'Mayagüez', 'Arecibo', 'Guaynabo', 'Carolina',
   'Humacao', 'Aguadilla', 'Fajardo', 'Cayey', 'Yauco', 'Utuado', 'Lares',
@@ -88,39 +102,29 @@ export const CITY_NAMES = [
   'Salinas', 'Loíza', 'Río Grande', 'Toa Alta', 'Aibonito', 'Barranquitas',
 ];
 
-// Satirical random world events. {text} can use {civ}; weight ~ rarity.
+// Eventos satíricos aleatorios. {civ} se reemplaza por el nombre del partido.
 export const FLAVOR_EVENTS = [
-  { kind: 'debuff', stat: 'growth', civ: 'pnp', text: '🔌 Apagón general: LUMA leaves {civ} in the dark again.' },
-  { kind: 'debuff', stat: 'diplomacy', civ: 'pnp', text: '💸 Corruption scandal rocks {civ}; nobody is surprised.' },
-  { kind: 'buff', stat: 'growth', civ: 'ppd', text: '🤝 {civ} cuts a backroom deal; the machine hums along.' },
-  { kind: 'buff', stat: 'resilience', civ: 'ind', text: '✊ {civ} hold a rally in the plaza; morale soars.' },
-  { kind: 'debuff', stat: 'growth', civ: 'any', text: '🦟 Dengue outbreak slows {civ}.' },
-  { kind: 'buff', stat: 'aggression', civ: 'pnp', text: '📣 A {civ} debate gets out of hand; tempers flare.' },
-  { kind: 'buff', stat: 'growth', civ: 'any', text: '🏝️ Tourism season booms for {civ}.' },
-  { kind: 'debuff', stat: 'growth', civ: 'any', text: '📉 Austerity board (la Junta) squeezes {civ}.' },
-  { kind: 'buff', stat: 'diplomacy', civ: 'ppd', text: '🎩 {civ} don the pava and win over the countryside.' },
-  { kind: 'buff', stat: 'intelligence', civ: 'ind', text: '📚 {civ} pack the university; new ideas spread.' },
-  { kind: 'debuff', stat: 'intelligence', civ: 'pnp', text: '🤡 {civ} misread the map and march into a swamp.' },
+  { civ: 'pnp', text: '🔌 Apagón general: LUMA deja a {civ} a oscuras otra vez.' },
+  { civ: 'pnp', text: '💸 Escándalo de corrupción sacude a {civ}; nadie se sorprende.' },
+  { civ: 'pnp', text: '🤡 {civ} leyó mal el mapa y marchó hacia un pantano.' },
+  { civ: 'ppd', text: '🤝 {civ} cuadra un pacto entre bastidores; la maquinaria ronronea.' },
+  { civ: 'ppd', text: '🎩 {civ} se ponen la pava y conquistan el campo.' },
+  { civ: 'mvc', text: '✊ {civ} llena la plaza con una marcha anticorrupción.' },
+  { civ: 'mvc', text: '📚 {civ} copa la universidad; las ideas nuevas se riegan.' },
+  { civ: 'ind', text: '🌿 {civ} iza la monoestrellada en la montaña; sube la moral.' },
+  { civ: 'molina', text: '📱 Un video de {civ} se hace viral y arrasa en las redes.' },
+  { civ: 'molina', text: '🚜 {civ} reparte cosecha del país y gana corazones.' },
+  { civ: 'any', text: '🦟 Brote de dengue ralentiza a {civ}.' },
+  { civ: 'any', text: '🏝️ Temporada turística en auge para {civ}.' },
+  { civ: 'any', text: '📉 La Junta de control fiscal aprieta a {civ}.' },
 ];
 
-// Ruler titles per party + name pools (generic PR-flavored, not real people).
-export const RULER_TITLE = { pnp: 'Gobernador', ppd: 'Gobernador', ind: 'Líder' };
-export const RULER_FIRST = [
-  'Juan', 'Pedro', 'Luis', 'Carlos', 'José', 'Ramón', 'Héctor', 'Rafael', 'Ana',
-  'María', 'Carmen', 'Sonia', 'Wanda', 'Pedro Pablo', 'Jenniffer', 'Aníbal',
-  'Sila', 'Roberto', 'Ricardo', 'Alejandro', 'Tomás', 'Eduardo', 'Gloria',
-];
-export const RULER_LAST = [
-  'Rivera', 'Rodríguez', 'Colón', 'Vega', 'Santiago', 'Ortiz', 'Torres',
-  'Marín', 'Ferré', 'Acevedo', 'Calderón', 'Rosselló', 'Pierluisi', 'Fortuño',
-  'Concepción', 'Berríos', 'Albizu', 'Muñoz', 'Romero', 'Quiñones', 'del Valle',
-];
-
-/** Deep-copy the default civ definitions so traits can be edited at runtime. */
+/** Copia profunda de los partidos para poder editar rasgos en vivo. */
 export function defaultCivs() {
   return CIVS.map((c) => ({
     ...c,
     traits: { ...c.traits },
     specials: { ...c.specials },
+    start: { ...c.start },
   }));
 }

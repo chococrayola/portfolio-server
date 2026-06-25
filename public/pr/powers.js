@@ -1,10 +1,9 @@
-/* powers.js — the god toolbox.
+/* powers.js — la caja de poderes divinos (en español).
  *
- * Each power describes a tool in the palette and an apply() that mutates the
- * world at the clicked tile. Powers flagged needsCiv use the civ picked in the
- * UI (spawn, bless). PR-flavored disasters lean into the island's real
- * history: Hurricane María, the 2020 earthquakes, and the endless LUMA
- * blackouts.
+ * Cada poder define una herramienta del panel y un apply() que altera el mundo
+ * en la casilla pulsada. Los marcados con needsCiv usan el partido elegido en
+ * la interfaz (crear, bendecir). Los desastres llevan sabor boricua: el huracán
+ * María, los terremotos de 2020 y los eternos apagones de LUMA.
  */
 
 import { TILE } from './map.js';
@@ -12,27 +11,36 @@ import { TILE } from './map.js';
 export const POWERS = [
   {
     id: 'inspect',
-    label: 'Look',
+    label: 'Mirar',
     icon: '👆',
-    desc: 'Tap a person 👑 or city for stats. Drag to pan, pinch/scroll to zoom.',
+    desc: 'Toca una persona 👑 o ciudad para ver sus datos. Arrastra para mover, pellizca/rueda para acercar.',
     apply() {},
   },
   {
     id: 'spawn',
-    label: 'Spawn',
+    label: 'Crear',
     icon: '👶',
     needsCiv: true,
-    desc: 'Drop a new citizen of the chosen party.',
+    desc: 'Suelta un nuevo seguidor del partido elegido.',
     apply(world, x, y, civIndex) {
       for (let i = 0; i < 3; i++) world.spawnUnit(civIndex, x, y);
     },
   },
   {
+    id: 'free',
+    label: 'Librepensadores',
+    icon: '🧠',
+    desc: 'Suelta gente indecisa que vagará y quizás se una a un partido.',
+    apply(world, x, y) {
+      for (let i = 0; i < 6; i++) world.spawnFree(x, y);
+    },
+  },
+  {
     id: 'bless',
-    label: 'Bless',
+    label: 'Bendecir',
     icon: '✨',
     needsCiv: true,
-    desc: 'Heal a party, grow its cities, and warm relations.',
+    desc: 'Sana a un partido, hace crecer sus ciudades y mejora sus relaciones.',
     apply(world, x, y, civIndex) {
       world.blessCiv(civIndex);
     },
@@ -41,70 +49,70 @@ export const POWERS = [
     id: 'hurricane',
     label: 'Huracán María',
     icon: '🌀',
-    desc: 'A monster hurricane flattens everything it touches.',
+    desc: 'Un huracán monstruoso arrasa todo a su paso.',
     apply(world, x, y) {
-      world.damageArea(x, y, 9, 22, '🌀 Huracán María makes landfall!', true);
+      world.damageArea(x, y, 9, 22, '🌀 ¡El huracán María toca tierra!', true);
     },
   },
   {
     id: 'quake',
     label: 'Terremoto',
     icon: '🌎',
-    desc: 'An earthquake cracks the ground (2020, never forget).',
+    desc: 'Un temblor agrieta la tierra (2020, no se olvida).',
     apply(world, x, y) {
-      world.damageArea(x, y, 7, 18, '🌎 A terremoto shakes the island!', false);
+      world.damageArea(x, y, 7, 18, '🌎 ¡Un terremoto sacude la isla!', false);
     },
   },
   {
     id: 'meteor',
-    label: 'Meteor',
+    label: 'Meteorito',
     icon: '☄️',
-    desc: 'A meteor strike. Biblical, indiscriminate.',
+    desc: 'Un impacto de meteorito. Bíblico e indiscriminado.',
     apply(world, x, y) {
-      world.damageArea(x, y, 6, 40, '☄️ A meteor slams into Puerto Rico!', true);
+      world.damageArea(x, y, 6, 40, '☄️ ¡Un meteorito impacta Puerto Rico!', true);
     },
   },
   {
     id: 'plague',
-    label: 'Plague',
+    label: 'Plaga',
     icon: '🦠',
-    desc: 'A sickness sweeps through the population.',
+    desc: 'Una enfermedad se propaga entre la población.',
     apply(world, x, y) {
-      world.damageArea(x, y, 8, 12, '🦠 A plague spreads through the towns.', false);
+      world.damageArea(x, y, 8, 12, '🦠 Una plaga se riega por los pueblos.', false);
     },
   },
   {
     id: 'lightning',
-    label: 'Smite',
+    label: 'Rayo',
     icon: '⚡',
-    desc: 'A precise bolt from the heavens.',
+    desc: 'Un rayo certero desde los cielos.',
     apply(world, x, y) {
-      world.damageArea(x, y, 2, 60, '⚡ A bolt of lightning strikes!', false);
+      world.damageArea(x, y, 2, 60, '⚡ ¡Cae un rayo!', false);
     },
   },
   {
     id: 'dragon',
-    label: 'Dragon',
+    label: 'Dragón',
     icon: '🐉',
-    desc: 'Unleash a fire-breathing dragon on the area.',
+    desc: 'Desata un dragón que escupe fuego sobre la zona.',
     apply(world, x, y) {
       world.spawnDragon(x, y);
     },
   },
   {
     id: 'ufo',
-    label: 'UFO',
+    label: 'OVNI',
     icon: '🛸',
-    desc: 'A flying saucer that abducts the locals.',
+    desc: 'Un platillo volador que abduce a la gente.',
     apply(world, x, y) {
       world.spawnUfo(x, y);
     },
   },
   {
     id: 'volcano',
-    label: 'Volcano',
+    label: 'Volcán',
     icon: '🌋',
-    desc: 'Raise a volcano that erupts with lava.',
+    desc: 'Levanta un volcán que entra en erupción con lava.',
     apply(world, x, y) {
       world.eruptVolcano(x, y);
     },
@@ -113,63 +121,52 @@ export const POWERS = [
     id: 'tornado',
     label: 'Tornado',
     icon: '🌪️',
-    desc: 'Spawn a twister that roams and flings units.',
+    desc: 'Genera un tornado que deambula y lanza unidades.',
     apply(world, x, y) {
       world.spawnTornado(x, y);
-    },
-  },
-  {
-    id: 'wildlife',
-    label: 'Wildlife',
-    icon: '🐑',
-    desc: 'Drop a little flock of sheep (and a wolf or two).',
-    apply(world, x, y) {
-      const A = world.ANIMAL;
-      for (let i = 0; i < 5; i++) world.spawnAnimal(A.SHEEP, x, y);
-      world.spawnAnimal(A.WOLF, x, y);
     },
   },
   {
     id: 'blackout',
     label: 'Apagón (LUMA)',
     icon: '🔌',
-    desc: 'Cut the power. Cities stop growing and shrink.',
+    desc: 'Corta la luz. Las ciudades dejan de crecer y se encogen.',
     apply(world, x, y) {
       world.blackout(x, y, 12);
     },
   },
   {
     id: 'land',
-    label: 'Raise Land',
+    label: 'Crear tierra',
     icon: '🟫',
-    desc: 'Terraform ocean into grassland.',
+    desc: 'Convierte el mar en pradera.',
     apply(world, x, y) {
       world.terraform(x, y, 2, TILE.GRASS);
     },
   },
   {
     id: 'water',
-    label: 'Flood',
+    label: 'Inundar',
     icon: '🌊',
-    desc: 'Terraform land into ocean (drowns units).',
+    desc: 'Convierte la tierra en mar (ahoga unidades).',
     apply(world, x, y) {
       world.terraform(x, y, 2, TILE.OCEAN);
     },
   },
   {
     id: 'mountain',
-    label: 'Mountain',
+    label: 'Montaña',
     icon: '⛰️',
-    desc: 'Raise mountains (great guerrilla terrain).',
+    desc: 'Levanta montañas (gran terreno guerrillero).',
     apply(world, x, y) {
       world.terraform(x, y, 1, TILE.MOUNTAIN);
     },
   },
   {
     id: 'forest',
-    label: 'Forest',
+    label: 'Bosque',
     icon: '🌳',
-    desc: 'Grow a forest.',
+    desc: 'Hace crecer un bosque.',
     apply(world, x, y) {
       world.terraform(x, y, 2, TILE.FOREST);
     },

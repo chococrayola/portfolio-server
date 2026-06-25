@@ -162,6 +162,12 @@ function updatePartyStrip() {
     }
     el.appendChild(chip);
   });
+  // Neutral free-thinker tally.
+  const free = document.createElement('span');
+  free.className = 'pchip';
+  free.innerHTML = `<span class="pdot" style="background:#9aa6b2"></span>` +
+    `<b style="color:#c2cbd4">Librepensadores</b> <b>${world.free ? world.free.length : 0}</b>`;
+  el.appendChild(free);
 }
 
 // HUD panels refresh on a gentler cadence than the render loop.
@@ -176,14 +182,14 @@ setInterval(() => {
 }, 350);
 
 function updatePlayBtn() {
-  $('playBtn').textContent = running ? '⏸ Pause' : '▶ Play';
+  $('playBtn').textContent = running ? '⏸ Pausa' : '▶ Jugar';
 }
 
 // ---- Stats panel ---------------------------------------------------------
 function renderStats() {
   const el = $('stats');
   const land = world.landCount || 1;
-  el.innerHTML = '<h2>Parties</h2>';
+  el.innerHTML = '<h2>Partidos</h2>';
   world.civs.forEach((c, i) => {
     const s = world.stats[i];
     const pct = Math.round((s.territory / land) * 100);
@@ -201,12 +207,12 @@ function renderStats() {
       <h3 style="color:${c.color}">${c.name}</h3>
       <p class="full">${c.full} · est. ${c.founded}</p>
       <p class="ruler"></p>
-      <div class="row"><span>Population</span><span>${s.pop}</span></div>
-      <div class="row"><span>Cities</span><span>${s.cities}</span></div>
-      <div class="row"><span>Territory</span><span>${pct}%</span></div>
+      <div class="row"><span>Población</span><span>${s.pop}</span></div>
+      <div class="row"><span>Ciudades</span><span>${s.cities}</span></div>
+      <div class="row"><span>Territorio</span><span>${pct}%</span></div>
       <div class="bar"><div style="width:${pct}%;background:${c.color}"></div></div>
       <div class="tags">
-        ${dead ? '<span class="tag dead">eliminated</span>' : ''}
+        ${dead ? '<span class="tag dead">eliminado</span>' : ''}
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
       </div>
     `;
@@ -239,7 +245,7 @@ function showWin() {
   const w = world.winner;
   const c = world.civs[w];
   const banner = $('winBanner');
-  banner.innerHTML = `<div style="color:${c.color}">👑 ${c.name} rule Puerto Rico!</div>` +
+  banner.innerHTML = `<div style="color:${c.color}">👑 ¡${c.name} gobiernan Puerto Rico!</div>` +
     `<small>"${c.motto}"</small>`;
   banner.classList.remove('hidden');
 }
@@ -440,6 +446,10 @@ function renderTraitEditor() {
   const el = $('traitEditor');
   el.innerHTML = '';
   const traitNames = ['aggression', 'brutality', 'intelligence', 'expansion', 'growth', 'diplomacy', 'resilience'];
+  const traitLabel = {
+    aggression: 'agresión', brutality: 'brutalidad', intelligence: 'inteligencia',
+    expansion: 'expansión', growth: 'crecimiento', diplomacy: 'diplomacia', resilience: 'resiliencia',
+  };
   civDefs.forEach((c) => {
     const box = document.createElement('div');
     box.className = 'trait-civ';
@@ -447,7 +457,7 @@ function renderTraitEditor() {
     traitNames.forEach((tn) => {
       const row = document.createElement('div');
       row.className = 'trait-row';
-      row.innerHTML = `<label>${tn}</label>`;
+      row.innerHTML = `<label>${traitLabel[tn]}</label>`;
       const input = document.createElement('input');
       input.type = 'range';
       input.min = '0';
