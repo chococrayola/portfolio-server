@@ -1,0 +1,194 @@
+/* Puerto Rico nature & photography map — styling.
+   Color palette echoes the existing puerto-rico.css (dark island vibe). */
+
+:root {
+  --bg: #0f1720;
+  --panel: #18222e;
+  --panel-2: #1f2c3a;
+  --ink: #e7eef5;
+  --muted: #9fb0c0;
+  --line: #2b3a4a;
+  --accent: #f4b942;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Header */
+.topbar {
+  position: relative;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, #15242f, #0f1720);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.topbar .brand { font-size: 1.15rem; font-weight: 800; }
+.topbar .subtitle { font-size: 0.9rem; color: var(--muted); }
+.topbar .count { margin-left: auto; font-size: 0.85rem; color: var(--accent); font-weight: 700; }
+
+/* Map fills the rest of the viewport */
+#map {
+  position: absolute;
+  top: 0; /* JS offset handled via CSS below */
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.layout {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+.layout #map { position: relative; flex: 1; }
+
+/* --- Custom marker pins --- */
+.pin-wrap { background: none; border: none; }
+.pin {
+  position: relative;
+  width: 34px;
+  height: 44px;
+}
+.pin-bubble {
+  position: absolute;
+  top: 0; left: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--pin-color, #888);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pin-emoji { font-size: 17px; line-height: 1; }
+.pin-tip {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 0; height: 0;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 11px solid var(--pin-color, #888);
+}
+
+/* --- Legend --- */
+.legend {
+  background: rgba(24, 34, 46, 0.95);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  font-size: 0.9rem;
+  max-width: 220px;
+}
+.legend-head {
+  font-weight: 800;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.legend-row input { cursor: pointer; accent-color: var(--accent); }
+.legend-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+.legend-label { line-height: 1.1; }
+
+/* --- Popups --- */
+.leaflet-popup-content-wrapper {
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.leaflet-popup-tip { background: var(--panel); }
+.leaflet-popup-content { margin: 12px 14px; line-height: 1.4; }
+
+.popup-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #0f1720;
+  background: var(--badge-color, #888);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.popup-title { margin: 8px 0 4px; font-size: 1.05rem; }
+.popup-meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+.popup-desc { margin: 6px 0; font-size: 0.9rem; }
+.popup-tip, .popup-access {
+  margin: 6px 0;
+  font-size: 0.83rem;
+  color: var(--muted);
+}
+.popup-tip strong, .popup-access strong { color: var(--ink); }
+
+.popup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.btn-directions, .btn-view {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+}
+.btn-directions {
+  background: var(--accent);
+  color: #0f1720;
+}
+.btn-directions:hover { filter: brightness(1.08); }
+.btn-view {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.btn-view:hover { background: #26384a; }
+
+/* Mobile tweaks */
+@media (max-width: 520px) {
+  .legend { max-width: 170px; font-size: 0.82rem; padding: 8px 10px; }
+  .topbar .subtitle { width: 100%; }
+}

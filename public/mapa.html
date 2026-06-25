@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1720" />
+  <title>Mapa de Naturaleza · Puerto Rico</title>
+  <meta name="description" content="Mapa interactivo de playas, ríos, charcas, lagos, senderos y lugares turísticos de Puerto Rico para fotografía de naturaleza y macro." />
+
+  <!-- Leaflet (vendored locally — free, no API key, no external CDN) -->
+  <link rel="stylesheet" href="mapa/vendor/leaflet.css" />
+  <script src="mapa/vendor/leaflet.js"></script>
+
+  <link rel="stylesheet" href="mapa/style.css" />
+</head>
+<body>
+  <div class="layout">
+    <header class="topbar">
+      <span class="brand">🌿 Mapa de Naturaleza · Puerto Rico</span>
+      <span class="subtitle">Playas, ríos, charcas, lagos, senderos y lugares turísticos para fotografía</span>
+      <span class="count"><span id="place-count">0</span> lugares</span>
+    </header>
+
+    <div id="map"></div>
+  </div>
+
+  <script type="module" src="mapa/app.js"></script>
+</body>
+</html>
