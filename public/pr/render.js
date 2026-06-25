@@ -8,8 +8,8 @@
  * camera transform so pinch-zoom stays crisp.
  */
 
-import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=17';
-import { MGRID, OCEAN_ID } from './municipios.js?v=17';
+import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=18';
+import { MGRID, OCEAN_ID } from './municipios.js?v=18';
 
 const SCALE = 8; // world pixels per tile (mapa más grande)
 
@@ -28,18 +28,28 @@ export function createRenderer(canvas, world) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  // ---- Camera -----------------------------------------------------------
+  // ---- Camera (con suavizado) -------------------------------------------
+  // "current" es lo que se dibuja; "target" es a donde queremos llegar. Cada
+  // cuadro el current se desliza hacia el target → zoom/desplazamiento suaves.
   let zoom = 1, panX = 0, panY = 0;
-  function clampPan() {
-    if (zoom <= 1) { // zoomed out: center the map with margin around it
-      panX = (W - W * zoom) / 2;
-      panY = (H - H * zoom) / 2;
-    } else {
-      panX = Math.min(0, Math.max(W * (1 - zoom), panX));
-      panY = Math.min(0, Math.max(H * (1 - zoom), panY));
+  let zT = 1, pTx = 0, pTy = 0;
+  const MIN_ZOOM = 0.5;
+  function clampTarget() {
+    if (zT <= 1) { pTx = (W - W * zT) / 2; pTy = (H - H * zT) / 2; }
+    else {
+      pTx = Math.min(0, Math.max(W * (1 - zT), pTx));
+      pTy = Math.min(0, Math.max(H * (1 - zT), pTy));
     }
   }
-  const MIN_ZOOM = 0.5;
+  function easeCamera() {
+    const e = 0.28;
+    zoom += (zT - zoom) * e;
+    panX += (pTx - panX) * e;
+    panY += (pTy - panY) * e;
+    if (Math.abs(zT - zoom) < 0.002) zoom = zT;
+    if (Math.abs(pTx - panX) < 0.3) panX = pTx;
+    if (Math.abs(pTy - panY) < 0.3) panY = pTy;
+  }
   function clientToCanvas(clientX, clientY) {
     const r = canvas.getBoundingClientRect();
     return { x: ((clientX - r.left) / r.width) * W, y: ((clientY - r.top) / r.height) * H };
@@ -50,24 +60,24 @@ export function createRenderer(canvas, world) {
   }
   function zoomAtClient(clientX, clientY, factor) {
     const c = clientToCanvas(clientX, clientY);
-    const wx = (c.x - panX) / zoom, wy = (c.y - panY) / zoom;
-    zoom = Math.max(MIN_ZOOM, Math.min(8, zoom * factor));
-    panX = c.x - wx * zoom; panY = c.y - wy * zoom;
-    clampPan();
+    const wx = (c.x - pTx) / zT, wy = (c.y - pTy) / zT;
+    zT = Math.max(MIN_ZOOM, Math.min(8, zT * factor));
+    pTx = c.x - wx * zT; pTy = c.y - wy * zT;
+    clampTarget();
   }
   function panByClient(dx, dy) {
     const r = canvas.getBoundingClientRect();
-    panX += (dx / r.width) * W; panY += (dy / r.height) * H;
-    clampPan();
+    pTx += (dx / r.width) * W; pTy += (dy / r.height) * H;
+    clampTarget();
   }
   function zoomByCenter(factor) {
     const cxp = W / 2, cyp = H / 2;
-    const wx = (cxp - panX) / zoom, wy = (cyp - panY) / zoom;
-    zoom = Math.max(MIN_ZOOM, Math.min(8, zoom * factor));
-    panX = cxp - wx * zoom; panY = cyp - wy * zoom;
-    clampPan();
+    const wx = (cxp - pTx) / zT, wy = (cyp - pTy) / zT;
+    zT = Math.max(MIN_ZOOM, Math.min(8, zT * factor));
+    pTx = cxp - wx * zT; pTy = cyp - wy * zT;
+    clampTarget();
   }
-  function fit() { zoom = 1; panX = 0; panY = 0; }
+  function fit() { zT = 1; pTx = 0; pTy = 0; }
   function getZoom() { return zoom; }
 
   // ---- Offscreen 1px/tile layers ---------------------------------------
@@ -322,6 +332,12 @@ export function createRenderer(canvas, world) {
       const s = SCALE * (big ? 1.9 : 1.3);
       const px = c.x * SCALE + SCALE / 2, py = c.y * SCALE + SCALE / 2;
       const x0 = px - s / 2, y0 = py - s / 2;
+      // resalte del color del partido que la posee (y destello al conquistar)
+      const flash = c.flash > 0 ? c.flash / 45 : 0;
+      ctx.fillStyle = civ.color;
+      ctx.globalAlpha = 0.18 + flash * 0.5;
+      ctx.beginPath(); ctx.arc(px, py, s * (0.95 + flash * 0.7), 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.fillStyle = civ.colorDark;
       ctx.fillRect(x0, y0 + s * 0.42, s, s * 0.58);
       ctx.fillStyle = civ.color; // roof
@@ -383,6 +399,7 @@ export function createRenderer(canvas, world) {
 
   function draw() {
     if (terrainDirty) { buildTerrain(); buildDetail(); terrainDirty = false; }
+    easeCamera();
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;

@@ -14,8 +14,8 @@ import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=17';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=17';
+} from './map.js?v=18';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=18';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
@@ -26,8 +26,8 @@ const RETARGET_EVERY = 12;
 const TERRITORY_EVERY = 6;
 const WAR_THRESHOLD = 32;
 const PEACE_THRESHOLD = 62;
-const DOMINANCE = 0.48; // fraction of land owned to win
-const EVENT_CAP = 160;
+const DOMINANCE = 0.62; // fraction of land owned to win (juego más largo)
+const EVENT_CAP = 320; // historial más largo
 const SUMMARY_EVERY = 240; // "State of the Island" cadence
 const RAZE_CHANCE = 0.35; // chance a fallen city is razed instead of captured
 
@@ -165,6 +165,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       name: CITIZEN_NAMES[(rng() * CITIZEN_NAMES.length) | 0],
       since: 0,
       joined: t.tick, // turno en que se unió (antigüedad en el partido)
+      killLog: [], // historial de bajas (para líderes)
     };
     const ai = t.units.push(u) - 1;
     t.occ[idx(spot.x, spot.y)] = ai;
@@ -221,6 +222,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       muni,
       loyalty: 100,
       besieged: false,
+      flash: 30, // destello al fundarse/descubrirse
       siegeBy: new Array(N).fill(0),
     };
     t.cities.push(city);
@@ -327,6 +329,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   }
 
   // ---- Economía: presupuesto que sube y baja según el uso ---------------
+  const broke = civs.map(() => false);
   function updateEconomy() {
     for (let i = 0; i < N; i++) {
       const s = t.stats[i];
@@ -340,8 +343,24 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (t.budget[i] > 50000) t.budget[i] = 50000;
       const b = t.budget[i];
       t.budgetFactor[i] = b > 0 ? 1 + Math.min(0.6, b / 8000) : 0.4;
+      // historia: quiebra / recuperación
+      if (b < 0 && !broke[i]) { broke[i] = true; log(`💸 ${t.civs[i].name} entra en quiebra; sus campañas se frenan.`, i); }
+      else if (b > 800 && broke[i]) { broke[i] = false; log(`💵 ${t.civs[i].name} sanea sus finanzas.`, i); }
     }
   }
+
+  // Estado actual del líder (qué está haciendo) — para la barra de estado.
+  world.leaderStatus = function (i) {
+    const l = t.leaders[i];
+    if (!l || l.dead) return '— sin líder';
+    if (l.x >= OFFSHORE_X) return '⛵ Navegando a Puerto Rico';
+    if (anyWar(i)) return '⚔️ En campaña de guerra';
+    for (const cy of t.cities) {
+      if (cy.civ === i && Math.abs(cy.x - l.x) + Math.abs(cy.y - l.y) <= 4) return '🏛️ Gobernando su territorio';
+    }
+    if (t.budget[i] < 0) return '💸 Buscando fondos (en quiebra)';
+    return '🚶 Recorriendo la isla';
+  };
 
   // ---- Combat -----------------------------------------------------------
   function defenseFactor(unit) {
@@ -529,7 +548,14 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       const other = t.units[occupant];
       if (other && other.civ !== unit.civ && t.war[unit.civ][other.civ]) {
         fight(unit, other);
-        if (other.hp <= 0) { unit.kills++; t.kills[unit.civ]++; killUnit(occupant); }
+        if (other.hp <= 0) {
+          unit.kills++; t.kills[unit.civ]++;
+          if (unit.isLeader) {
+            unit.killLog.push({ name: other.name, civ: other.civ, tick: t.tick });
+            if (unit.killLog.length > 8) unit.killLog.shift();
+          }
+          killUnit(occupant);
+        }
       }
       // Friendly or non-war neighbor: stay put this step.
     }
@@ -634,6 +660,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
           city.hp = city.maxHp * 0.5;
           city.pop = Math.max(3, city.pop * 0.5);
           city.loyalty = 55;
+          city.flash = 45; // destello al cambiar de color
           t.owner[idx(city.x, city.y)] = captor;
         } else {
           log(`💥 ¡${city.name} (${city.muni}) de ${c.name} fue saqueada y arrasada!`, city.civ);
@@ -644,6 +671,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       }
       city.besieged = false;
       city.siegeBy.fill(0);
+      if (city.flash > 0) city.flash--;
       updateLoyalty(city);
     }
   }
@@ -746,7 +774,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     for (let i = 0; i < N; i++) if (t.stats[i].cities > 0 || t.stats[i].units > 0) alive.push(i);
     for (let i = 0; i < N; i++) t.momentum[i] = 1;
     alive.sort((a, b) => t.stats[b].territory - t.stats[a].territory);
-    alive.forEach((ci, rank) => { t.momentum[ci] = Math.max(0.6, 1.8 - rank * 0.55); });
+    alive.forEach((ci, rank) => { t.momentum[ci] = Math.max(0.7, 1.32 - rank * 0.22); });
   }
 
   // ---- Diplomacy --------------------------------------------------------
