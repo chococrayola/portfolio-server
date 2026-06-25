@@ -15,7 +15,7 @@ import {
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES,
 } from './map.js';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX } from './civs.js';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, RULER_TITLE, RULER_FIRST, RULER_LAST } from './civs.js';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
@@ -64,6 +64,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     events: [],
     animals: [], // ambient wildlife (sheep/wolf/fish/bird)
     effects: [], // transient hazards (dragon/ufo/volcano/tornado)
+    leaders: civs.map(() => null), // the ruler unit of each party
     winner: null,
     landCount: 0,
     nextUnitId: 1,
@@ -139,6 +140,11 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       move: 0,
       tx: -1,
       ty: -1,
+      kills: 0,
+      dead: false,
+      isLeader: false,
+      rulerName: null,
+      since: 0,
     };
     const ai = t.units.push(u) - 1;
     t.occ[idx(spot.x, spot.y)] = ai;
@@ -197,6 +203,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       for (let k = 0; k < 6; k++) spawnUnit(i, s.x, s.y);
     }
     seedAnimals();
+    for (let i = 0; i < N; i++) promoteLeader(i, true);
     recomputeTerritory();
     recomputeStats();
   }
@@ -360,7 +367,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       const other = t.units[occupant];
       if (other && other.civ !== unit.civ && t.war[unit.civ][other.civ]) {
         fight(unit, other);
-        if (other.hp <= 0) killUnit(occupant);
+        if (other.hp <= 0) { unit.kills++; killUnit(occupant); }
       }
       // Friendly or non-war neighbor: stay put this step.
     }
@@ -409,6 +416,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   function killUnit(ai) {
     const u = t.units[ai];
     if (!u) return;
+    u.dead = true;
     if (t.occ[idx(u.x, u.y)] === ai) t.occ[idx(u.x, u.y)] = -1;
     deadUnits.add(ai);
   }
@@ -877,6 +885,67 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     compactUnits();
   }
 
+  // ---- Rulers & succession ----------------------------------------------
+  function rulerName() {
+    return RULER_FIRST[(rng() * RULER_FIRST.length) | 0] + ' ' +
+      RULER_LAST[(rng() * RULER_LAST.length) | 0];
+  }
+
+  function promoteLeader(civIndex, announce) {
+    // Choose the bloodiest, then oldest living unit of this civ as the new ruler.
+    let best = null;
+    for (const u of t.units) {
+      if (u.civ !== civIndex || u.dead) continue;
+      if (!best || u.kills > best.kills || (u.kills === best.kills && u.age > best.age)) best = u;
+    }
+    t.leaders[civIndex] = best;
+    if (!best) return null;
+    best.isLeader = true;
+    best.rulerName = rulerName();
+    best.since = t.tick;
+    best.maxHp += 10;
+    best.hp = best.maxHp;
+    if (announce) {
+      const title = RULER_TITLE[t.civs[civIndex].id] || 'Líder';
+      log(`👑 ${best.rulerName} rises as ${title} of ${t.civs[civIndex].name}.`, civIndex);
+    }
+    return best;
+  }
+
+  function checkSuccession() {
+    for (let i = 0; i < N; i++) {
+      const lead = t.leaders[i];
+      if (!lead || lead.dead) {
+        const had = !!lead;
+        const next = promoteLeader(i, false);
+        if (next) {
+          const title = RULER_TITLE[t.civs[i].id] || 'Líder';
+          if (had) log(`⚰️ The ${title} of ${t.civs[i].name} has fallen — ${next.rulerName} succeeds them.`, i);
+          else log(`👑 ${next.rulerName} becomes ${title} of ${t.civs[i].name}.`, i);
+        } else if (had) {
+          t.leaders[i] = null;
+        }
+      }
+    }
+  }
+
+  // Find the unit on/near a tile (for click-to-inspect).
+  world.unitAt = function (x, y) {
+    for (let r = 0; r <= 2; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const nx = x + dx, ny = y + dy;
+          if (!inBounds(nx, ny)) continue;
+          const oi = t.occ[idx(nx, ny)];
+          if (oi >= 0 && t.units[oi] && !t.units[oi].dead) return t.units[oi];
+        }
+      }
+    }
+    return null;
+  };
+  world.cityAtTile = function (x, y) { return cityAt(x, y); };
+
   // ---- Win check --------------------------------------------------------
   function checkWinner() {
     const alive = [];
@@ -927,6 +996,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       updateUnit(t.units[ai], ai);
     }
     compactUnits();
+    checkSuccession();
     updateCities();
     updateAnimals();
     updateEffects();

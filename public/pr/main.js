@@ -101,7 +101,7 @@ function loop(now) {
 
 // HUD panels refresh on a gentler cadence than the render loop.
 setInterval(() => {
-  if (world) { renderStats(); renderLog(); }
+  if (world) { renderStats(); renderLog(); if (selected) renderInspector(); }
 }, 350);
 
 function updatePlayBtn() {
@@ -121,12 +121,15 @@ function renderStats() {
     for (let j = 0; j < world.civs.length; j++) {
       if (j !== i && world.war[i][j]) wars.push(`⚔ ${world.civs[j].name.replace('Los ', '')}`);
     }
+    const lead = world.leaders[i];
+    const ruler = lead ? `👑 ${lead.rulerName}` : '👑 —';
     const card = document.createElement('div');
     card.className = 'civ-card';
     card.style.borderLeftColor = c.color;
     card.innerHTML = `
       <h3 style="color:${c.color}">${c.name}</h3>
       <p class="full">${c.full} · est. ${c.founded}</p>
+      <p class="ruler"></p>
       <div class="row"><span>Population</span><span>${s.pop}</span></div>
       <div class="row"><span>Cities</span><span>${s.cities}</span></div>
       <div class="row"><span>Territory</span><span>${pct}%</span></div>
@@ -136,6 +139,8 @@ function renderStats() {
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
       </div>
     `;
+    card.querySelector('.ruler').textContent = ruler;
+    card.querySelector('.ruler').style.color = lead ? '#ffd34d' : 'var(--muted)';
     el.appendChild(card);
   });
 }
@@ -227,20 +232,25 @@ function pinchState() {
   return { dist: Math.hypot(a.x - b.x, a.y - b.y), midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2 };
 }
 
+let tap = null; // tracks a candidate tap for click-to-inspect (Look tool)
+
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture?.(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) {
     lastSingle = { x: e.clientX, y: e.clientY };
+    tap = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false };
     if (tool !== 'inspect') applyTool(e.clientX, e.clientY);
   } else if (pointers.size === 2) {
     pinch = pinchState();
     lastSingle = null;
+    tap = null;
   }
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (tap && e.pointerId === tap.id && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 6) tap.moved = true;
   if (pointers.size >= 2) {
     const ns = pinchState();
     if (pinch) {
@@ -258,9 +268,13 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 function endPointer(e) {
+  // A clean tap with the Look tool selects a character/city to inspect.
+  if (tool === 'inspect' && tap && e.pointerId === tap.id && !tap.moved && pointers.size === 1) {
+    inspectAt(e.clientX, e.clientY);
+  }
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
-  if (pointers.size === 0) lastSingle = null;
+  if (pointers.size === 0) { lastSingle = null; tap = null; }
   else { const p = [...pointers.values()][0]; lastSingle = { x: p.x, y: p.y }; }
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -274,6 +288,83 @@ canvas.addEventListener('wheel', (e) => {
 $('zoomIn').addEventListener('click', () => renderer.zoomByCenter(1.3));
 $('zoomOut').addEventListener('click', () => renderer.zoomByCenter(0.77));
 $('zoomFit').addEventListener('click', () => renderer.fit());
+
+// ---- Inspector (tap a character/city with the Look tool) -----------------
+let selected = null; // { kind: 'unit'|'city', ref }
+const RULER_TITLE = { pnp: 'Gobernador', ppd: 'Gobernador', ind: 'Líder' };
+
+function inspectAt(clientX, clientY) {
+  const { x, y } = renderer.screenToTile(clientX, clientY);
+  const u = world.unitAt(x, y);
+  if (u) { selected = { kind: 'unit', ref: u }; renderInspector(); return; }
+  const c = world.cityAtTile(x, y);
+  if (c) { selected = { kind: 'city', ref: c }; renderInspector(); return; }
+  selected = null;
+  $('inspector').classList.add('hidden');
+}
+
+function bar(frac, color) {
+  const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
+  return `<div class="ibar"><div style="width:${pct}%;background:${color}"></div></div>`;
+}
+
+function renderInspector() {
+  const el = $('inspector');
+  if (!selected) { el.classList.add('hidden'); return; }
+  const body = $('inspBody');
+  const years = (ticks) => Math.floor(ticks / 5);
+
+  if (selected.kind === 'unit') {
+    const u = selected.ref;
+    const c = world.civs[u.civ];
+    const crown = u.isLeader ? '👑 ' : '';
+    const role = u.isLeader
+      ? `${RULER_TITLE[c.id] || 'Líder'}`
+      : 'Ciudadano';
+    const name = u.isLeader ? u.rulerName : `${role} de ${c.name.replace('Los ', '')}`;
+    const dead = u.dead ? `<div class="idead">† Cayó en combate</div>` : '';
+    const reign = u.isLeader ? `<div class="irow"><span>Reinado</span><span>${years(world.tick - u.since)} años</span></div>` : '';
+    body.innerHTML = `
+      <div class="ihead">
+        <span class="iface" style="background:${c.color}">${crown || '🧍'}</span>
+        <div>
+          <div class="iname" style="color:${c.color}">${''}</div>
+          <div class="ipart">${c.name}</div>
+        </div>
+      </div>
+      ${dead}
+      <div class="irow"><span>Cargo</span><span>${crown ? (RULER_TITLE[c.id] || 'Líder') : 'Ciudadano'}</span></div>
+      <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
+      <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}</span></div>
+      ${bar(u.hp / u.maxHp, '#3fd96b')}
+      <div class="irow"><span>Bajas</span><span>⚔ ${u.kills}</span></div>
+      ${reign}
+    `;
+    body.querySelector('.iname').textContent = name;
+  } else {
+    const c = selected.ref;
+    const civ = world.civs[c.civ];
+    body.innerHTML = `
+      <div class="ihead">
+        <span class="iface" style="background:${civ.color}">🏙️</span>
+        <div>
+          <div class="iname" style="color:${civ.color}"></div>
+          <div class="ipart">${civ.name}</div>
+        </div>
+      </div>
+      <div class="irow"><span>Municipio</span><span>${''}</span></div>
+      <div class="irow"><span>Población</span><span>${Math.round(c.pop)}</span></div>
+      <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(c.hp))}/${Math.round(c.maxHp)}</span></div>
+      ${bar(c.hp / c.maxHp, '#3fd96b')}
+      <div class="irow"><span>Lealtad</span><span>${Math.round(c.loyalty)}%</span></div>
+    `;
+    body.querySelector('.iname').textContent = c.name;
+    body.querySelectorAll('.irow span:last-child')[0].textContent = c.muni || '—';
+  }
+  el.classList.remove('hidden');
+}
+
+$('inspClose').addEventListener('click', () => { selected = null; $('inspector').classList.add('hidden'); });
 
 // ---- Trait editor --------------------------------------------------------
 function renderTraitEditor() {
