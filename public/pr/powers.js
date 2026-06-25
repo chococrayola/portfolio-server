@@ -14,7 +14,7 @@ export const POWERS = [
     id: 'inspect',
     label: 'Look',
     icon: '👆',
-    desc: 'Drag to pan, pinch/scroll to zoom. (Two fingers pan & zoom with any tool.)',
+    desc: 'Tap a person 👑 or city for stats. Drag to pan, pinch/scroll to zoom.',
     apply() {},
   },
   {

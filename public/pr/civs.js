@@ -103,6 +103,19 @@ export const FLAVOR_EVENTS = [
   { kind: 'debuff', stat: 'intelligence', civ: 'pnp', text: '🤡 {civ} misread the map and march into a swamp.' },
 ];
 
+// Ruler titles per party + name pools (generic PR-flavored, not real people).
+export const RULER_TITLE = { pnp: 'Gobernador', ppd: 'Gobernador', ind: 'Líder' };
+export const RULER_FIRST = [
+  'Juan', 'Pedro', 'Luis', 'Carlos', 'José', 'Ramón', 'Héctor', 'Rafael', 'Ana',
+  'María', 'Carmen', 'Sonia', 'Wanda', 'Pedro Pablo', 'Jenniffer', 'Aníbal',
+  'Sila', 'Roberto', 'Ricardo', 'Alejandro', 'Tomás', 'Eduardo', 'Gloria',
+];
+export const RULER_LAST = [
+  'Rivera', 'Rodríguez', 'Colón', 'Vega', 'Santiago', 'Ortiz', 'Torres',
+  'Marín', 'Ferré', 'Acevedo', 'Calderón', 'Rosselló', 'Pierluisi', 'Fortuño',
+  'Concepción', 'Berríos', 'Albizu', 'Muñoz', 'Romero', 'Quiñones', 'del Valle',
+];
+
 /** Deep-copy the default civ definitions so traits can be edited at runtime. */
 export function defaultCivs() {
   return CIVS.map((c) => ({

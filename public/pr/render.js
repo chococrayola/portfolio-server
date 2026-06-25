@@ -250,6 +250,30 @@ export function createRenderer(canvas, world) {
     }
   }
 
+  function drawLeaders() {
+    for (const u of world.units) {
+      if (!u.isLeader) continue;
+      const px = u.x * SCALE, py = u.y * SCALE, cx = px + SCALE / 2;
+      // gold halo so rulers are findable even when zoomed out
+      ctx.fillStyle = 'rgba(255,211,77,0.35)';
+      ctx.beginPath(); ctx.arc(cx, py + SCALE / 2, SCALE * 0.9, 0, 7); ctx.fill();
+      // crown above the head
+      const w = SCALE * 0.9, h = SCALE * 0.6, x0 = cx - w / 2, yb = py - 1, yt = yb - h;
+      ctx.fillStyle = '#ffd34d';
+      ctx.beginPath();
+      ctx.moveTo(x0, yb);
+      ctx.lineTo(x0, yt);
+      ctx.lineTo(x0 + w * 0.25, yt + h * 0.5);
+      ctx.lineTo(cx, yt);
+      ctx.lineTo(x0 + w * 0.75, yt + h * 0.5);
+      ctx.lineTo(x0 + w, yt);
+      ctx.lineTo(x0 + w, yb);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#7a5a00'; ctx.lineWidth = 0.4; ctx.stroke();
+    }
+  }
+
   function drawCities() {
     for (const c of world.cities) {
       const civ = world.civs[c.civ];
@@ -334,6 +358,7 @@ export function createRenderer(canvas, world) {
     const detailed = zoom >= 2.2;
     drawUnits(detailed);
     drawAnimals(detailed);
+    drawLeaders();
     drawCities();
     drawEffects();
   }

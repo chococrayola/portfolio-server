@@ -249,4 +249,33 @@ body {
 .trait-row input { width: 100%; accent-color: var(--accent); }
 .trait-row .v { text-align: right; font-weight: 700; }
 
+/* Inspector card */
+.inspector {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 240px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 12px 14px;
+  z-index: 15;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.insp-close { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; }
+.ihead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.iface {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; border: 2px solid rgba(255,255,255,0.6);
+}
+.iname { font-weight: 800; font-size: 1rem; }
+.ipart { color: var(--muted); font-size: 0.74rem; }
+.idead { color: #ff9b9b; font-size: 0.8rem; margin: 2px 0 6px; font-weight: 700; }
+.irow { display: flex; justify-content: space-between; font-size: 0.82rem; margin: 3px 0; }
+.irow span:last-child { font-weight: 700; }
+.ibar { height: 8px; border-radius: 5px; background: var(--panel-2); overflow: hidden; margin: 2px 0 6px; }
+.ibar > div { height: 100%; }
+.civ-card .ruler { font-size: 0.78rem; font-weight: 700; margin: 0 0 8px; }
+
 .hidden { display: none !important; }
