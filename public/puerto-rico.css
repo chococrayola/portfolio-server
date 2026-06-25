@@ -37,6 +37,7 @@ body {
   gap: 12px;
 }
 .brand { font-size: 1.1rem; font-weight: 800; white-space: nowrap; }
+.ver { font-size: 0.65rem; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
 .clock {
   font-weight: 800;
   font-size: 0.95rem;

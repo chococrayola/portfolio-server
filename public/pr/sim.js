@@ -14,8 +14,8 @@ import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js';
+} from './map.js?v=17';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=17';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
