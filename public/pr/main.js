@@ -67,6 +67,7 @@ function buildWorld() {
   });
   renderer = createRenderer(canvas, world);
   renderer.draw();
+  buildCharts();
   renderStats();
   renderLog();
   renderCharts();
@@ -242,7 +243,7 @@ function renderStats() {
       <div class="row"><span>Presupuesto 💰</span><span class="${budget < 0 ? 'neg' : ''}">${money(budget)}</span></div>
       <div class="row"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
       <div class="row dim"><span>Edad media</span><span>${avgAge} a</span></div>
-      <div class="row dim"><span>Antigüedad media</span><span>${avgTen} a</span></div>
+      <div class="row dim"><span>Bajas ⚔</span><span>${world.kills ? world.kills[i] : 0}</span></div>
       <div class="tags">
         ${dead ? '<span class="tag dead">eliminado</span>' : ''}
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
@@ -253,56 +254,134 @@ function renderStats() {
   });
 }
 
-// ---- Gráficas (canvas) ---------------------------------------------------
+// ---- Gráficas: 15 cuadros en vivo ----------------------------------------
+// Cada def: { title, kind, get }. kind: 'lines' (series por partido en el
+// tiempo), 'lineOne' (una serie), 'bars' (un valor por partido), 'donut'
+// (reparto por partido), 'hist' (histograma de un campo por unidad).
+const CHART_DEFS = [
+  { id: 'c1', title: 'Población en el tiempo', kind: 'lines', get: () => world.history.map((h) => h.pop) },
+  { id: 'c2', title: 'Territorio en el tiempo (tiles)', kind: 'lines', get: () => world.history.map((h) => h.terr) },
+  { id: 'c3', title: 'Presupuesto en el tiempo ($)', kind: 'lines', get: () => world.history.map((h) => h.budget) },
+  { id: 'c4', title: 'Librepensadores en el tiempo', kind: 'lineOne', get: () => world.history.map((h) => h.free) },
+  { id: 'c5', title: 'Población actual', kind: 'bars', get: () => world.stats.map((s) => s.pop) },
+  { id: 'c6', title: 'Territorio actual (%)', kind: 'bars', get: () => world.stats.map((s) => Math.round((s.territory / (world.landCount || 1)) * 100)) },
+  { id: 'c7', title: 'Ciudades', kind: 'bars', get: () => world.stats.map((s) => s.cities) },
+  { id: 'c8', title: 'Ejército (unidades)', kind: 'bars', get: () => world.stats.map((s) => s.units) },
+  { id: 'c9', title: 'Reclutados (acum.)', kind: 'bars', get: () => world.recruited.slice() },
+  { id: 'c10', title: 'Bajas causadas (acum.)', kind: 'bars', get: () => world.kills.slice() },
+  { id: 'c11', title: 'Presupuesto actual ($)', kind: 'bars', get: () => world.budget.map((b) => Math.round(b)) },
+  { id: 'c12', title: 'Reparto del territorio', kind: 'donut', get: () => world.stats.map((s) => s.territory) },
+  { id: 'c13', title: 'Reinado del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 5) : 0)) },
+  { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => unitBuckets((u) => u.age) },
+  { id: 'c15', title: 'Antigüedad en el partido', kind: 'hist', get: () => unitBuckets((u) => world.tick - u.joined) },
+];
+
+function unitBuckets(fn, B = 10) {
+  const buckets = new Array(B).fill(0);
+  let max = 1;
+  for (const u of world.units) { const v = fn(u); if (v > max) max = v; }
+  for (const u of world.units) buckets[Math.min(B - 1, Math.floor((fn(u) / (max + 1)) * B))]++;
+  return buckets;
+}
+
+function buildCharts() {
+  const legend = $('chartLegend');
+  legend.innerHTML = '';
+  world.civs.forEach((c) => {
+    const lg = document.createElement('span');
+    lg.className = 'lg';
+    lg.innerHTML = `<span class="lgd" style="background:${c.color}"></span>${c.name.replace('Los ', '')}`;
+    legend.appendChild(lg);
+  });
+  const grid = $('chartsGrid');
+  grid.innerHTML = '';
+  CHART_DEFS.forEach((d) => {
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.innerHTML = `<h4>${d.title}</h4><canvas id="${d.id}" width="180" height="96"></canvas>`;
+    grid.appendChild(card);
+  });
+}
+
 function renderCharts() {
-  // 1) población por partido a través del tiempo (líneas)
-  const pc = $('popChart');
-  if (pc) {
-    const x = pc.getContext('2d');
-    const W = pc.width, H = pc.height;
+  const colors = world.civs.map((c) => c.color);
+  for (const d of CHART_DEFS) {
+    const cv = document.getElementById(d.id);
+    if (!cv) continue;
+    const x = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
     x.clearRect(0, 0, W, H);
-    const hist = world.history || [];
-    if (hist.length >= 2) {
-      let max = 1;
-      for (const h of hist) for (const p of h.pop) if (p > max) max = p;
-      for (let ci = 0; ci < world.civs.length; ci++) {
-        x.strokeStyle = world.civs[ci].color;
-        x.lineWidth = 1.6;
-        x.beginPath();
-        hist.forEach((h, k) => {
-          const px = (k / (hist.length - 1)) * (W - 4) + 2;
-          const py = H - 3 - (h.pop[ci] / max) * (H - 6);
-          if (k) x.lineTo(px, py); else x.moveTo(px, py);
-        });
-        x.stroke();
-      }
-    } else {
-      x.fillStyle = '#5b6b7a';
-      x.font = '12px system-ui, sans-serif';
-      x.fillText('Recopilando datos…', 8, H / 2);
-    }
+    const data = d.get();
+    if (d.kind === 'lines') drawLines(x, W, H, data, colors);
+    else if (d.kind === 'lineOne') drawLines(x, W, H, data.map((v) => [v]), ['#f4b942']);
+    else if (d.kind === 'bars') drawBars(x, W, H, data, colors);
+    else if (d.kind === 'donut') drawDonut(x, W, H, data, colors);
+    else if (d.kind === 'hist') drawBarsSimple(x, W, H, data, '#f4b942');
   }
-  // 2) distribución de edades de toda la población (barras)
-  const ac = $('ageChart');
-  if (ac) {
-    const x = ac.getContext('2d');
-    const W = ac.width, H = ac.height;
-    x.clearRect(0, 0, W, H);
-    const B = 10, buckets = new Array(B).fill(0);
-    let maxAge = 1;
-    for (const u of world.units) if (u.age > maxAge) maxAge = u.age;
-    for (const u of world.units) {
-      const b = Math.min(B - 1, Math.floor((u.age / (maxAge + 1)) * B));
-      buckets[b]++;
-    }
-    const maxB = Math.max(1, ...buckets);
-    const bw = W / B;
-    for (let i = 0; i < B; i++) {
-      const bh = (buckets[i] / maxB) * (H - 4);
-      x.fillStyle = '#f4b942';
-      x.fillRect(i * bw + 1, H - bh, bw - 2, bh);
-    }
+}
+
+function drawLines(x, W, H, samples, colors) {
+  if (!samples || samples.length < 2) { noData(x, W, H); return; }
+  const n = samples[0].length;
+  let max = 1, min = 0;
+  for (const row of samples) for (const v of row) { if (v > max) max = v; if (v < min) min = v; }
+  const span = max - min || 1;
+  for (let s = 0; s < n; s++) {
+    x.strokeStyle = colors[s] || '#888';
+    x.lineWidth = 1.5;
+    x.beginPath();
+    samples.forEach((row, k) => {
+      const px = (k / (samples.length - 1)) * (W - 4) + 2;
+      const py = H - 3 - ((row[s] - min) / span) * (H - 6);
+      if (k) x.lineTo(px, py); else x.moveTo(px, py);
+    });
+    x.stroke();
   }
+}
+
+function drawBars(x, W, H, values, colors) {
+  const max = Math.max(1, ...values.map((v) => Math.abs(v)));
+  const bw = W / values.length;
+  const zeroY = H - 12;
+  for (let i = 0; i < values.length; i++) {
+    const bh = (Math.abs(values[i]) / max) * (zeroY - 2);
+    x.fillStyle = colors[i] || '#888';
+    x.fillRect(i * bw + 2, zeroY - bh, bw - 4, bh);
+    x.fillStyle = '#aeb8c2';
+    x.font = '8px system-ui, sans-serif';
+    x.textAlign = 'center';
+    x.fillText(String(values[i]), i * bw + bw / 2, H - 3);
+  }
+}
+
+function drawBarsSimple(x, W, H, buckets, color) {
+  const max = Math.max(1, ...buckets);
+  const bw = W / buckets.length;
+  for (let i = 0; i < buckets.length; i++) {
+    const bh = (buckets[i] / max) * (H - 4);
+    x.fillStyle = color;
+    x.fillRect(i * bw + 1, H - bh, bw - 2, bh);
+  }
+}
+
+function drawDonut(x, W, H, values, colors) {
+  const total = values.reduce((a, b) => a + b, 0) || 1;
+  const cx = W / 2, cy = H / 2, r = Math.min(W, H) / 2 - 4;
+  let a0 = -Math.PI / 2;
+  for (let i = 0; i < values.length; i++) {
+    const a1 = a0 + (values[i] / total) * Math.PI * 2;
+    x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, r, a0, a1); x.closePath();
+    x.fillStyle = colors[i] || '#888'; x.fill();
+    a0 = a1;
+  }
+  x.fillStyle = '#0c141d'; x.beginPath(); x.arc(cx, cy, r * 0.55, 0, 7); x.fill();
+}
+
+function noData(x, W, H) {
+  x.fillStyle = '#5b6b7a';
+  x.font = '11px system-ui, sans-serif';
+  x.textAlign = 'left';
+  x.fillText('Recopilando…', 6, H / 2);
 }
 
 function renderLog() {

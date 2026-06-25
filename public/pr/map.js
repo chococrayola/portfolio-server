@@ -35,7 +35,7 @@ export const TILE_COLOR = {
 
 // --- Terrain gameplay modifiers ------------------------------------------
 export const MOVE_COST = {
-  [TILE.OCEAN]: Infinity,
+  [TILE.OCEAN]: 2.6, // navegable (en bote) — lento pero cruzable
   [TILE.BEACH]: 1.0,
   [TILE.GRASS]: 1.0,
   [TILE.HILL]: 1.6,

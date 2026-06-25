@@ -43,30 +43,26 @@
   </div>
   <p id="toolHint" class="tool-hint">Elige un poder y toca el mapa.</p>
 
-  <main class="layout">
-    <section class="board">
-      <div class="canvas-wrap">
-        <canvas id="world"></canvas>
-        <div class="zoom-controls">
-          <button id="zoomIn" class="zoom-btn" aria-label="Acercar">+</button>
-          <button id="zoomOut" class="zoom-btn" aria-label="Alejar">−</button>
-          <button id="zoomFit" class="zoom-btn" aria-label="Ver todo">⤢</button>
-        </div>
-        <div id="winBanner" class="win-banner hidden"></div>
+  <main class="board">
+    <div class="canvas-wrap">
+      <canvas id="world"></canvas>
+      <div class="zoom-controls">
+        <button id="zoomIn" class="zoom-btn" aria-label="Acercar">+</button>
+        <button id="zoomOut" class="zoom-btn" aria-label="Alejar">−</button>
+        <button id="zoomFit" class="zoom-btn" aria-label="Ver todo">⤢</button>
       </div>
-    </section>
-
-    <aside class="side">
-      <section class="charts">
-        <h2>Gráficas</h2>
-        <canvas id="popChart" width="300" height="120"></canvas>
-        <div class="chart-cap">Población por partido (a través del tiempo)</div>
-        <canvas id="ageChart" width="300" height="80"></canvas>
-        <div class="chart-cap">Distribución de edades</div>
-      </section>
-      <section id="stats" class="stats"></section>
-    </aside>
+      <div id="winBanner" class="win-banner hidden"></div>
+    </div>
   </main>
+
+  <!-- Tablero debajo del mapa -->
+  <section class="dashboard">
+    <h2 class="dash-title">Tablero</h2>
+    <div id="stats" class="stats"></div>
+    <h2 class="dash-title">Gráficas en vivo</h2>
+    <div id="chartLegend" class="chart-legend"></div>
+    <div id="chartsGrid" class="charts-grid"></div>
+  </section>
 
   <!-- Character / city inspector -->
   <div id="inspector" class="inspector hidden">

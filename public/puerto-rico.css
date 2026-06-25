@@ -130,19 +130,27 @@ body {
 .tick b { color: var(--ink); }
 
 /* Layout */
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
-  padding: 16px;
-  align-items: start;
-}
-/* Give the map the full width on tablets/phones; sidebar drops below it. */
-@media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr; }
-}
+.board { padding: 16px 16px 0; }
 
-.board { min-width: 0; }
+/* Tablero a lo ancho, debajo del mapa */
+.dashboard { padding: 14px 16px 28px; }
+.dash-title { font-size: 1rem; margin: 14px 2px 10px; color: var(--ink); }
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 10px;
+}
+.chart-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 8px 6px;
+}
+.chart-card h4 { margin: 0 0 5px; font-size: 0.74rem; color: var(--muted); font-weight: 700; line-height: 1.2; }
+.chart-card canvas { width: 100%; height: auto; display: block; background: #0c141d; border-radius: 6px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 2px 12px; font-size: 0.78rem; }
+.chart-legend .lg { display: flex; align-items: center; gap: 5px; }
+.chart-legend .lgd { width: 11px; height: 11px; border-radius: 3px; }
 .canvas-wrap {
   position: relative;
   background: #0a1019;
@@ -222,7 +230,7 @@ body {
 .tool-hint { color: var(--muted); font-size: 0.82rem; margin: 10px 2px 0; }
 
 /* Stats */
-.stats { display: flex; flex-direction: column; gap: 10px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
 .civ-card {
   background: var(--panel);
   border: 1px solid var(--line);
