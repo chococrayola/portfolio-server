@@ -67,6 +67,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     free: [], // librepensadores — undecided people the parties recruit
     leaders: civs.map(() => null), // the ruler unit of each party
     recruited: civs.map(() => 0), // librepensadores convencidos por cada partido
+    budget: civs.map(() => 5000), // presupuesto inicial $5,000
+    budgetFactor: civs.map(() => 1), // multiplicador de campaña según dinero
+    history: [], // muestras {pop:[],terr:[]} para gráficas
     winner: null,
     landCount: 0,
     nextUnitId: 1,
@@ -158,6 +161,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       rulerName: null,
       name: CITIZEN_NAMES[(rng() * CITIZEN_NAMES.length) | 0],
       since: 0,
+      joined: t.tick, // turno en que se unió (antigüedad en el partido)
     };
     const ai = t.units.push(u) - 1;
     t.occ[idx(spot.x, spot.y)] = ai;
@@ -268,14 +272,15 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
           if (!inBounds(nx, ny)) continue;
           const oi = t.occ[idx(nx, ny)];
           if (oi >= 0 && t.units[oi] && !t.units[oi].dead) {
+            const cv = t.units[oi].civ;
             const d = Math.hypot(dx, dy) || 1;
-            inf[t.units[oi].civ] += t.charisma[t.units[oi].civ] / d;
+            inf[cv] += t.charisma[cv] * t.budgetFactor[cv] / d; // las campañas con plata convencen más
           }
         }
       }
       for (const c of t.cities) {
         const d = Math.hypot(c.x - f.x, c.y - f.y);
-        if (d <= R + 3) inf[c.civ] += t.charisma[c.civ] * 1.5 / (1 + d);
+        if (d <= R + 3) inf[c.civ] += t.charisma[c.civ] * t.budgetFactor[c.civ] * 1.5 / (1 + d);
       }
       // a little loyalty to their initial leaning
       inf[f.lean] += 1.2;
@@ -293,6 +298,23 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
 
   function cullFree(cx, cy, r) {
     if (t.free.length) t.free = t.free.filter((f) => Math.hypot(f.x - cx, f.y - cy) > r);
+  }
+
+  // ---- Economía: presupuesto que sube y baja según el uso ---------------
+  function updateEconomy() {
+    for (let i = 0; i < N; i++) {
+      const s = t.stats[i];
+      const income = s.cities * 8 + s.pop * 0.6 + s.territory * 0.12;
+      const upkeep = s.units * 0.8; // mantener seguidores cuesta
+      // la corrupción drena las arcas (más en los más brutales)
+      const corr = t.civs[i].traits.brutality > 7 ? t.budget[i] * 0.03
+        : (t.budget[i] > 0 ? t.budget[i] * 0.004 : 0);
+      t.budget[i] += income - upkeep - corr;
+      if (t.budget[i] < -3000) t.budget[i] = -3000;
+      if (t.budget[i] > 50000) t.budget[i] = 50000;
+      const b = t.budget[i];
+      t.budgetFactor[i] = b > 0 ? 1 + Math.min(0.6, b / 8000) : 0.4;
+    }
   }
 
   // ---- Combat -----------------------------------------------------------
@@ -432,6 +454,23 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     // Slow passive healing.
     if (unit.hp < unit.maxHp) unit.hp += 0.05;
 
+    // Desafección: un seguidor descontento puede irse y volver a ser
+    // librepensador (los líderes no desertan).
+    if (!unit.isLeader && (t.tick + unit.id) % 40 === 0) {
+      const civ = unit.civ;
+      let discontent = 0;
+      if (t.momentum[civ] < 0.9) discontent += (0.9 - t.momentum[civ]); // su partido va perdiendo
+      if (t.budget[civ] < 0) discontent += 0.4; // partido en quiebra
+      if (t.owner[idx(unit.x, unit.y)] !== civ) discontent += 0.22; // lejos de los suyos
+      if (rng() < Math.min(0.5, discontent * 0.16)) {
+        spawnFree(unit.x, unit.y);
+        if (t.recruited[civ] > 0) t.recruited[civ]--;
+        if (rng() < 0.04) log(`💔 ${unit.name} abandonó a ${t.civs[civ].name}.`, civ);
+        killUnit(ai);
+        return;
+      }
+    }
+
     if ((t.tick + unit.id) % RETARGET_EVERY === 0) retarget(unit);
 
     unit.move += UNIT_SPEED;
@@ -536,12 +575,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       // Growth (the territorial leader's economy snowballs via momentum).
       city.pop += 0.045 * c.traits.growth * GROWTH_MOD[tile] * t.momentum[city.civ];
       if (city.pop > 45) city.pop = 45;
-      // Spawn a citizen when ripe.
-      if (city.pop >= 7 && t.units.length < MAX_UNITS) {
+      // Spawn a citizen when ripe — cuesta dinero de campaña.
+      if (city.pop >= 7 && t.units.length < MAX_UNITS && t.budget[city.civ] > 40) {
         const spot = freeNeighbor(city.x, city.y);
         if (spot) {
           spawnUnit(city.civ, spot.x, spot.y);
           city.pop -= 4;
+          t.budget[city.civ] -= 40;
         }
       }
       // Regenerate only when not under active siege.
@@ -1084,6 +1124,11 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       recomputeTerritory();
       recomputeStats();
       checkWinner();
+    }
+    if (t.tick % 10 === 0) updateEconomy();
+    if (t.tick % 120 === 0) {
+      t.history.push({ pop: t.stats.map((s) => s.pop), terr: t.stats.map((s) => s.territory) });
+      if (t.history.length > 180) t.history.shift();
     }
     if (t.tick % SUMMARY_EVERY === 0 && t.winner === null) summarize();
   }
