@@ -157,11 +157,13 @@ export function generateMap(seed = 7) {
     elYunque: { x: Math.round(eyx), y: Math.round(eyy) },
   };
 
-  // Balanced starting anchors spread west / east / central across the main island.
+  // Spread starting anchors across the main island (one per party).
   const starts = [
-    { x: Math.round(COLS * 0.13), y: Math.round(ROWS * 0.55) }, // west (Mayagüez side)
-    { x: Math.round(COLS * 0.70), y: Math.round(ROWS * 0.45) }, // east
-    { x: Math.round(COLS * 0.40), y: Math.round(ROWS * 0.6) },  // central mountains
+    { x: Math.round(COLS * 0.10), y: Math.round(ROWS * 0.55) }, // oeste (Mayagüez)
+    { x: Math.round(COLS * 0.45), y: Math.round(ROWS * 0.30) }, // norte-centro (San Juan)
+    { x: Math.round(COLS * 0.33), y: Math.round(ROWS * 0.66) }, // montañas centrales
+    { x: Math.round(COLS * 0.68), y: Math.round(ROWS * 0.42) }, // este
+    { x: Math.round(COLS * 0.56), y: Math.round(ROWS * 0.72) }, // sur
   ].map((p) => nearestLand(tiles, p.x, p.y));
 
   return {

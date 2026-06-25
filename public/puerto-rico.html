@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1c5e8c" />
-  <title>Isla de Poder — Puerto Rico World Sim</title>
+  <title>Isla de Poder — Simulación de Puerto Rico</title>
   <link rel="stylesheet" href="puerto-rico.css" />
 </head>
 <body>
@@ -19,15 +19,15 @@
   </header>
 
   <div class="controls">
-    <button id="playBtn" class="btn btn-primary">▶ Play</button>
-    <button id="stepBtn" class="btn btn-ghost">⏭ Step</button>
-    <button id="resetBtn" class="btn btn-ghost">↺ Reset</button>
+    <button id="playBtn" class="btn btn-primary">▶ Jugar</button>
+    <button id="stepBtn" class="btn btn-ghost">⏭ Paso</button>
+    <button id="resetBtn" class="btn btn-ghost">↺ Reiniciar</button>
     <label class="speed">
-      Speed
+      Velocidad
       <input id="speed" type="range" min="1" max="8" step="1" value="3" />
       <span id="speedVal">3×</span>
     </label>
-    <span class="tick">Tick <b id="tickVal">0</b></span>
+    <span class="tick">Turno <b id="tickVal">0</b></span>
   </div>
 
   <main class="layout">
@@ -45,7 +45,7 @@
       <div class="tools">
         <div id="civPicker" class="civ-picker"></div>
         <div id="powerList" class="power-list"></div>
-        <p id="toolHint" class="tool-hint">Pick a power, then click the map.</p>
+        <p id="toolHint" class="tool-hint">Elige un poder y toca el mapa.</p>
       </div>
     </section>
 
@@ -68,12 +68,12 @@
   <div id="settingsOverlay" class="overlay hidden">
     <div class="panel">
       <div class="panel-head">
-        <h2>Trait Editor</h2>
-        <button id="settingsClose" class="icon-btn" aria-label="Close">✕</button>
+        <h2>Editor de Rasgos</h2>
+        <button id="settingsClose" class="icon-btn" aria-label="Cerrar">✕</button>
       </div>
-      <p class="panel-sub">Tweak each party's DNA (0–10). Changes apply on the next Reset.</p>
+      <p class="panel-sub">Ajusta el ADN de cada partido (0–10). Los cambios aplican al Reiniciar.</p>
       <div id="traitEditor" class="trait-editor"></div>
-      <button id="resetTraits" class="btn btn-ghost full">Reset traits to defaults</button>
+      <button id="resetTraits" class="btn btn-ghost full">Restaurar rasgos por defecto</button>
     </div>
   </div>
 

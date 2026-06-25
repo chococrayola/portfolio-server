@@ -219,6 +219,25 @@ export function createRenderer(canvas, world) {
     }
   }
 
+  function drawFree(detailed) {
+    if (!world.free) return;
+    for (const f of world.free) {
+      const px = f.x * SCALE, py = f.y * SCALE, cx = px + SCALE / 2;
+      if (!detailed) {
+        ctx.fillStyle = '#b9c2cc';
+        ctx.fillRect(px + SCALE * 0.3, py + SCALE * 0.3, SCALE * 0.4, SCALE * 0.4);
+        continue;
+      }
+      const top = py + 0.5;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(cx - 1.6, top, 3.2, SCALE - 0.5);
+      ctx.fillStyle = '#c2cbd4';
+      ctx.fillRect(cx - 1.2, top + 2, 2.4, SCALE - 2.5);
+      ctx.fillStyle = '#9aa6b2';
+      ctx.fillRect(cx - 1.2, top, 2.4, 2);
+    }
+  }
+
   function drawAnimals(detailed) {
     for (const a of world.animals) {
       const px = a.x * SCALE, py = a.y * SCALE, cx = px + SCALE / 2, cy = py + SCALE / 2;
@@ -356,6 +375,7 @@ export function createRenderer(canvas, world) {
     ctx.drawImage(muni, 0, 0);
 
     const detailed = zoom >= 2.2;
+    drawFree(detailed);
     drawUnits(detailed);
     drawAnimals(detailed);
     drawLeaders();
