@@ -8,8 +8,8 @@
  * camera transform so pinch-zoom stays crisp.
  */
 
-import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=18';
-import { MGRID, OCEAN_ID } from './municipios.js?v=18';
+import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=19';
+import { MGRID, OCEAN_ID } from './municipios.js?v=19';
 
 const SCALE = 8; // world pixels per tile (mapa más grande)
 
@@ -33,7 +33,7 @@ export function createRenderer(canvas, world) {
   // cuadro el current se desliza hacia el target → zoom/desplazamiento suaves.
   let zoom = 1, panX = 0, panY = 0;
   let zT = 1, pTx = 0, pTy = 0;
-  const MIN_ZOOM = 0.5;
+  const MIN_ZOOM = 0.4;
   function clampTarget() {
     if (zT <= 1) { pTx = (W - W * zT) / 2; pTy = (H - H * zT) / 2; }
     else {
@@ -79,6 +79,13 @@ export function createRenderer(canvas, world) {
   }
   function fit() { zT = 1; pTx = 0; pTy = 0; }
   function getZoom() { return zoom; }
+  // Centra la cámara en una casilla (para "ir al líder").
+  function focusOn(tx, ty, z) {
+    zT = Math.max(z || 3, MIN_ZOOM);
+    const wx = tx * SCALE + SCALE / 2, wy = ty * SCALE + SCALE / 2;
+    pTx = W / 2 - wx * zT; pTy = H / 2 - wy * zT;
+    clampTarget();
+  }
 
   // ---- Offscreen 1px/tile layers ---------------------------------------
   const terrain = document.createElement('canvas');
@@ -353,11 +360,6 @@ export function createRenderer(canvas, world) {
         ctx.fillStyle = '#fff'; ctx.fillRect(px - 0.5, y0 - s * 0.4, 1, s * 0.4);
         ctx.fillStyle = civ.color; ctx.fillRect(px, y0 - s * 0.4, s * 0.35, s * 0.18);
       }
-      if (c.hp < c.maxHp) {
-        const w = s;
-        ctx.fillStyle = '#000'; ctx.fillRect(px - w / 2, y0 - 3, w, 2);
-        ctx.fillStyle = '#3fd96b'; ctx.fillRect(px - w / 2, y0 - 3, w * (c.hp / c.maxHp), 2);
-      }
     }
   }
 
@@ -403,7 +405,7 @@ export function createRenderer(canvas, world) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#0a1019';
+    ctx.fillStyle = '#1c5e8c'; // mar alrededor (se ve más agua al alejar)
     ctx.fillRect(0, 0, W, H);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
@@ -423,5 +425,5 @@ export function createRenderer(canvas, world) {
 
   function markTerrainDirty() { terrainDirty = true; }
 
-  return { draw, markTerrainDirty, screenToTile, zoomAtClient, zoomByCenter, panByClient, fit, getZoom, SCALE };
+  return { draw, markTerrainDirty, screenToTile, zoomAtClient, zoomByCenter, panByClient, fit, focusOn, getZoom, SCALE };
 }

@@ -5,25 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1c5e8c" />
   <title>Isla de Poder — Simulación de Puerto Rico</title>
-  <link rel="stylesheet" href="puerto-rico.css?v=18" />
+  <link rel="stylesheet" href="puerto-rico.css?v=19" />
 </head>
 <body>
   <header class="topbar" id="statusBar">
     <div class="status-main">
       <span class="brand">🏝️ Isla de Poder</span>
-      <span class="ver">v18</span>
+      <span class="ver">v19</span>
       <span id="clock" class="clock">—</span>
       <span id="ticker" class="ticker">El mundo despierta…</span>
       <button id="settingsToggle" class="icon-btn" aria-label="Editor de rasgos">⚙️</button>
     </div>
     <div id="partyStrip" class="party-strip"></div>
   </header>
-
-  <!-- Crónica: barra de historial a lo ancho, arriba -->
-  <section class="cronica-top">
-    <h2>Historia</h2>
-    <ul id="eventLog" class="event-log"></ul>
-  </section>
 
   <div class="controls">
     <button id="playBtn" class="btn btn-primary">▶ Jugar</button>
@@ -58,8 +52,15 @@
 
   <!-- Tablero debajo del mapa -->
   <section class="dashboard">
-    <h2 class="dash-title">Tablero</h2>
+    <h2 class="dash-title">Tablero de líderes</h2>
     <div id="stats" class="stats"></div>
+
+    <h2 class="dash-title">Segundos al mando</h2>
+    <div id="deputies" class="deputies"></div>
+
+    <h2 class="dash-title">Historia</h2>
+    <ul id="eventLog" class="event-log big"></ul>
+
     <h2 class="dash-title">Gráficas en vivo</h2>
     <div id="chartLegend" class="chart-legend"></div>
     <div id="chartsGrid" class="charts-grid"></div>
@@ -84,6 +85,6 @@
     </div>
   </div>
 
-  <script type="module" src="pr/main.js?v=18"></script>
+  <script type="module" src="pr/main.js?v=19"></script>
 </body>
 </html>

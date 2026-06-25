@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=18';
-import { defaultCivs } from './civs.js?v=18';
-import { createWorld } from './sim.js?v=18';
-import { createRenderer } from './render.js?v=18';
-import { POWERS, POWER_BY_ID } from './powers.js?v=18';
-import { avatarDataURL } from './avatar.js?v=18';
+import { generateMap } from './map.js?v=19';
+import { defaultCivs } from './civs.js?v=19';
+import { createWorld } from './sim.js?v=19';
+import { createRenderer } from './render.js?v=19';
+import { POWERS, POWER_BY_ID } from './powers.js?v=19';
+import { avatarDataURL } from './avatar.js?v=19';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -69,6 +69,7 @@ function buildWorld() {
   renderer.draw();
   buildCharts();
   renderStats();
+  renderDeputies();
   renderLog();
   renderCharts();
   updateClock();
@@ -128,6 +129,10 @@ function formatStamp(ticks) {
   const t = gameTime(ticks);
   return `A${t.year} M${t.month} D${t.day}`;
 }
+function formatDate(ticks) {
+  const t = gameTime(ticks);
+  return `Año ${t.year}, Mes ${t.month}, Día ${t.day}`;
+}
 
 function updateClock() {
   if (world) $('clock').textContent = formatClock(world.tick);
@@ -145,6 +150,12 @@ function updatePartyStrip() {
   const el = $('partyStrip');
   el.innerHTML = '';
   const land = world.landCount || 1;
+  // Totales arriba: Población e Indecisos.
+  const totalPop = world.stats.reduce((a, s) => a + s.pop, 0);
+  const tot = document.createElement('span');
+  tot.className = 'pchip ptot';
+  tot.innerHTML = `👥 <b>${totalPop}</b> población &nbsp; 🧠 <b>${world.free ? world.free.length : 0}</b> indecisos`;
+  el.appendChild(tot);
   world.civs.forEach((c, i) => {
     const s = world.stats[i];
     const pct = Math.round((s.territory / land) * 100);
@@ -165,18 +176,36 @@ function updatePartyStrip() {
     }
     el.appendChild(chip);
   });
-  // Neutral free-thinker tally.
-  const free = document.createElement('span');
-  free.className = 'pchip';
-  free.innerHTML = `<span class="pdot" style="background:#9aa6b2"></span>` +
-    `<b style="color:#c2cbd4">Librepensadores</b> <b>${world.free ? world.free.length : 0}</b>`;
-  el.appendChild(free);
+}
+
+// ---- Segundos al mando (barra) -------------------------------------------
+function renderDeputies() {
+  const el = $('deputies');
+  if (!el) return;
+  el.innerHTML = '';
+  world.civs.forEach((c, i) => {
+    const d = world.deputy[i];
+    const card = document.createElement('div');
+    card.className = 'deputy';
+    if (d) {
+      const av = avatarDataURL(d.name + d.id, c.color, { size: 34 });
+      card.innerHTML = `<img class="dep-av" alt="" src="${av}" />
+        <div class="dep-info"><div class="dep-name"></div>
+        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')} · ⚔ ${d.kills}</div></div>`;
+      card.querySelector('.dep-name').textContent = d.name;
+    } else {
+      card.innerHTML = `<div class="dep-info"><div class="dep-name dim">— sin nombrar —</div>
+        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')}</div></div>`;
+    }
+    el.appendChild(card);
+  });
 }
 
 // HUD panels refresh on a gentler cadence than the render loop.
 setInterval(() => {
   if (world) {
     renderStats();
+    renderDeputies();
     renderLog();
     renderCharts();
     updateTicker();
@@ -193,13 +222,7 @@ function updatePlayBtn() {
 function renderStats() {
   const el = $('stats');
   const land = world.landCount || 1;
-  const totalPop = world.stats.reduce((a, s) => a + s.pop, 0);
-  const freeN = world.free ? world.free.length : 0;
-  el.innerHTML = `<h2>Tablero</h2>
-    <div class="board-totals">
-      <span>👥 Población <b>${totalPop}</b></span>
-      <span>🧠 Indecisos <b>${freeN}</b></span>
-    </div>`;
+  el.innerHTML = '';
   // demografía: edad y antigüedad media por partido (una sola pasada)
   const N = world.civs.length;
   const ageSum = new Array(N).fill(0), tenSum = new Array(N).fill(0), cnt = new Array(N).fill(0);
@@ -249,11 +272,31 @@ function renderStats() {
         ${dead ? '<span class="tag dead">eliminado</span>' : ''}
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
       </div>
+      <div class="card-btns">
+        <button class="card-btn" data-act="go" data-civ="${i}">📍 Ir al líder</button>
+        <button class="card-btn" data-act="kills" data-civ="${i}">⚔ Bajas</button>
+      </div>
     `;
+    card.dataset.civ = i;
     card.querySelector('.ruler span').textContent = lead ? lead.rulerName : '—';
     el.appendChild(card);
   });
 }
+
+// Delegated clicks for the leader-card buttons (Ir / Bajas).
+$('stats').addEventListener('click', (e) => {
+  const b = e.target.closest('.card-btn');
+  if (!b) return;
+  const i = Number(b.dataset.civ);
+  const lead = world.leaders[i];
+  if (!lead) return;
+  if (b.dataset.act === 'go') {
+    renderer.focusOn(lead.x, lead.y, 3.2);
+  } else if (b.dataset.act === 'kills') {
+    selected = { kind: 'unit', ref: lead };
+    renderInspector();
+  }
+});
 
 // ---- Gráficas: 15 cuadros en vivo ----------------------------------------
 // Cada def: { title, kind, get }. kind: 'lines' (series por partido en el
@@ -609,9 +652,7 @@ function renderInspector() {
       ${status}
       ${dead}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
-      <div class="irow"><span>En el partido</span><span>${years(world.tick - u.joined)} años</span></div>
-      <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}</span></div>
-      ${bar(u.hp / u.maxHp, '#3fd96b')}
+      <div class="irow"><span>Unido al partido</span><span>${formatDate(u.joined)}</span></div>
       <div class="irow"><span>Bajas</span><span>⚔ ${u.kills}</span></div>
       ${reign}
       ${killHist}
@@ -630,8 +671,6 @@ function renderInspector() {
       </div>
       <div class="irow"><span>Municipio</span><span></span></div>
       <div class="irow"><span>Población</span><span>${Math.round(c.pop)}</span></div>
-      <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(c.hp))}/${Math.round(c.maxHp)}</span></div>
-      ${bar(c.hp / c.maxHp, '#3fd96b')}
       <div class="irow"><span>Lealtad</span><span>${Math.round(c.loyalty)}%</span></div>
     `;
     body.querySelector('.iname').textContent = c.name;
