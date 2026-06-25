@@ -14,8 +14,8 @@ import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=18';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=18';
+} from './map.js?v=19';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=19';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
@@ -66,6 +66,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     effects: [], // transient hazards (dragon/ufo/volcano/tornado)
     free: [], // librepensadores — undecided people the parties recruit
     leaders: civs.map(() => null), // the ruler unit of each party
+    deputy: civs.map(() => null), // segundo al mando (tras conquistar/fundar ciudad)
     recruited: civs.map(() => 0), // librepensadores convencidos por cada partido
     budget: civs.map(() => 5000), // presupuesto inicial $5,000
     budgetFactor: civs.map(() => 1), // multiplicador de campaña según dinero
@@ -166,6 +167,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       since: 0,
       joined: t.tick, // turno en que se unió (antigüedad en el partido)
       killLog: [], // historial de bajas (para líderes)
+      isDeputy: false,
     };
     const ai = t.units.push(u) - 1;
     t.occ[idx(spot.x, spot.y)] = ai;
@@ -1108,6 +1110,29 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
   }
 
+  // Segundo al mando: se nombra cuando el partido tiene al menos una ciudad
+  // (la conquistó o la fundó/descubrió). Se reemplaza si cae.
+  function checkDeputy() {
+    for (let i = 0; i < N; i++) {
+      if (t.stats[i].cities <= 0) continue;
+      const d = t.deputy[i];
+      if (d && !d.dead) continue;
+      const lead = t.leaders[i];
+      let best = null;
+      for (const u of t.units) {
+        if (u.civ !== i || u.dead || u === lead) continue;
+        if (!best || u.kills > best.kills || (u.kills === best.kills && u.age > best.age)) best = u;
+      }
+      if (best) {
+        best.isDeputy = true;
+        t.deputy[i] = best;
+        log(`🎖️ ${best.name} es nombrado segundo al mando de ${t.civs[i].name}.`, i);
+      } else {
+        t.deputy[i] = null;
+      }
+    }
+  }
+
   // Find the unit on/near a tile (for click-to-inspect).
   world.unitAt = function (x, y) {
     for (let r = 0; r <= 2; r++) {
@@ -1176,6 +1201,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
     compactUnits();
     checkSuccession();
+    checkDeputy();
     updateCities();
     updateAnimals();
     updateFree();

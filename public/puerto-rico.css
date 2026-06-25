@@ -236,6 +236,24 @@ body {
 @media (max-width: 1100px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 460px) { .stats { grid-template-columns: 1fr; } }
+.ptot { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; }
+.ptot b { color: var(--accent); }
+.card-btns { display: flex; gap: 6px; margin-top: 8px; }
+.card-btn {
+  flex: 1; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+  border-radius: 8px; padding: 6px 4px; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+}
+.card-btn:active { background: var(--accent); color: #2a1d00; }
+.event-log.big { max-height: 300px; }
+/* Segundos al mando */
+.deputies { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
+@media (max-width: 1100px) { .deputies { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .deputies { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .deputies { grid-template-columns: 1fr; } }
+.deputy { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
+.dep-av { width: 30px; height: 30px; border-radius: 7px; image-rendering: pixelated; border: 1px solid var(--line); }
+.dep-name { font-weight: 700; font-size: 0.82rem; }
+.dep-sub { font-size: 0.72rem; }
 .card-status {
   font-size: 0.74rem;
   font-weight: 700;
