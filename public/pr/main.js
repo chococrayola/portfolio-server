@@ -68,6 +68,9 @@ function buildWorld() {
   renderer.draw();
   renderStats();
   renderLog();
+  updateClock();
+  updateTicker();
+  updatePartyStrip();
   $('winBanner').classList.add('hidden');
   $('tickVal').textContent = '0';
 }
@@ -75,7 +78,7 @@ function buildWorld() {
 // ---- Game loop -----------------------------------------------------------
 // Speed slider (1..8) maps to a real ticks-per-second rate, decoupled from the
 // 60fps render loop, so 1x is genuinely watchable and 8x is a fast-forward.
-const TPS = [6, 10, 15, 22, 30, 42, 56, 75];
+const TPS = [1, 2, 3, 5, 8, 12, 18, 28];
 const tps = () => TPS[Math.max(0, Math.min(TPS.length - 1, speed - 1))];
 let tickAcc = 0;
 let lastTime = performance.now();
@@ -91,6 +94,7 @@ function loop(now) {
   }
   renderer.draw();
   $('tickVal').textContent = world.tick;
+  updateClock();
   if (world.winner !== null && running) {
     running = false;
     updatePlayBtn();
@@ -99,9 +103,76 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+// ---- Game calendar (1 tick = 1 hour) ------------------------------------
+function gameTime(ticks) {
+  const hour = ticks % 24;
+  const totalDays = Math.floor(ticks / 24);
+  const day = (totalDays % 30) + 1;
+  const totalMonths = Math.floor(totalDays / 30);
+  const month = (totalMonths % 12) + 1;
+  const year = Math.floor(totalMonths / 12);
+  return { hour, day, month, year, decade: Math.floor(year / 10), century: Math.floor(year / 100) };
+}
+const pad = (n) => String(n).padStart(2, '0');
+function formatClock(ticks) {
+  const t = gameTime(ticks);
+  let era = '';
+  if (t.century > 0) era = `Siglo ${t.century + 1} · `;
+  else if (t.decade > 0) era = `Década ${t.decade} · `;
+  return `📅 ${era}Año ${t.year} · Mes ${t.month} · Día ${t.day} · ${pad(t.hour)}:00`;
+}
+function formatStamp(ticks) {
+  const t = gameTime(ticks);
+  return `A${t.year} M${t.month} D${t.day}`;
+}
+
+function updateClock() {
+  if (world) $('clock').textContent = formatClock(world.tick);
+}
+
+function updateTicker() {
+  if (!world || !world.events.length) return;
+  const e = world.events[0];
+  const ticker = $('ticker');
+  ticker.textContent = e.text;
+  ticker.style.color = e.civ != null ? world.civs[e.civ].color : 'var(--ink)';
+}
+
+function updatePartyStrip() {
+  const el = $('partyStrip');
+  el.innerHTML = '';
+  const land = world.landCount || 1;
+  world.civs.forEach((c, i) => {
+    const s = world.stats[i];
+    const pct = Math.round((s.territory / land) * 100);
+    const lead = world.leaders[i];
+    const chip = document.createElement('span');
+    chip.className = 'pchip';
+    chip.innerHTML = `<span class="pdot" style="background:${c.color}"></span>` +
+      `<b style="color:${c.color}">${c.name.replace('Los ', '')}</b> <b>${pct}%</b>`;
+    if (lead) {
+      const r = document.createElement('span');
+      r.className = 'pruler';
+      r.textContent = '👑' + lead.rulerName;
+      chip.appendChild(r);
+    } else if (s.cities === 0 && s.units === 0) {
+      const d = document.createElement('span');
+      d.textContent = '†';
+      chip.appendChild(d);
+    }
+    el.appendChild(chip);
+  });
+}
+
 // HUD panels refresh on a gentler cadence than the render loop.
 setInterval(() => {
-  if (world) { renderStats(); renderLog(); if (selected) renderInspector(); }
+  if (world) {
+    renderStats();
+    renderLog();
+    updateTicker();
+    updatePartyStrip();
+    if (selected) renderInspector();
+  }
 }, 350);
 
 function updatePlayBtn() {
@@ -151,15 +222,13 @@ function renderLog() {
   for (const e of world.events.slice(0, 90)) {
     const li = document.createElement('li');
     const color = e.civ != null ? world.civs[e.civ].color : 'var(--muted)';
-    // tick reads as an in-world "year" for flavor
-    const year = 'Año ' + e.tick;
     const text = document.createElement('span');
     text.textContent = e.text; // textContent avoids HTML injection from names
     text.style.borderLeft = `3px solid ${color}`;
-    text.style.paddingLeft = '6px';
+    text.style.paddingLeft = '8px';
     const t = document.createElement('span');
     t.className = 't';
-    t.textContent = year;
+    t.textContent = formatStamp(e.tick);
     li.appendChild(t);
     li.appendChild(text);
     el.appendChild(li);
