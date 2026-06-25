@@ -10,6 +10,7 @@ import { defaultCivs } from './civs.js';
 import { createWorld } from './sim.js';
 import { createRenderer } from './render.js';
 import { POWERS, POWER_BY_ID } from './powers.js';
+import { avatarDataURL } from './avatar.js';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -185,39 +186,52 @@ function updatePlayBtn() {
   $('playBtn').textContent = running ? '⏸ Pausa' : '▶ Jugar';
 }
 
-// ---- Stats panel ---------------------------------------------------------
+// ---- Dashboard (panel de estadísticas) -----------------------------------
 function renderStats() {
   const el = $('stats');
   const land = world.landCount || 1;
-  el.innerHTML = '<h2>Partidos</h2>';
-  world.civs.forEach((c, i) => {
+  const totalPop = world.stats.reduce((a, s) => a + s.pop, 0);
+  const freeN = world.free ? world.free.length : 0;
+  el.innerHTML = `<h2>Tablero</h2>
+    <div class="board-totals">
+      <span>👥 Población <b>${totalPop}</b></span>
+      <span>🧠 Indecisos <b>${freeN}</b></span>
+    </div>`;
+  // ordenar por territorio (líder primero) para vista tipo ranking
+  const order = world.civs.map((_, i) => i).sort((a, b) => world.stats[b].territory - world.stats[a].territory);
+  order.forEach((i) => {
+    const c = world.civs[i];
     const s = world.stats[i];
     const pct = Math.round((s.territory / land) * 100);
     const dead = s.units === 0 && s.cities === 0;
+    const lead = world.leaders[i];
     const wars = [];
     for (let j = 0; j < world.civs.length; j++) {
       if (j !== i && world.war[i][j]) wars.push(`⚔ ${world.civs[j].name.replace('Los ', '')}`);
     }
-    const lead = world.leaders[i];
-    const ruler = lead ? `👑 ${lead.rulerName}` : '👑 —';
+    const av = avatarDataURL(c.leader, c.color, { crown: true, size: 44 });
     const card = document.createElement('div');
     card.className = 'civ-card';
     card.style.borderLeftColor = c.color;
     card.innerHTML = `
-      <h3 style="color:${c.color}">${c.name}</h3>
-      <p class="full">${c.full} · est. ${c.founded}</p>
-      <p class="ruler"></p>
+      <div class="civ-head">
+        <img class="civ-av" alt="" src="${av}" />
+        <div class="civ-id">
+          <h3 style="color:${c.color}">${c.name}</h3>
+          <div class="ruler">👑 <span></span></div>
+        </div>
+      </div>
       <div class="row"><span>Población</span><span>${s.pop}</span></div>
       <div class="row"><span>Ciudades</span><span>${s.cities}</span></div>
       <div class="row"><span>Territorio</span><span>${pct}%</span></div>
       <div class="bar"><div style="width:${pct}%;background:${c.color}"></div></div>
+      <div class="row"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
       <div class="tags">
         ${dead ? '<span class="tag dead">eliminado</span>' : ''}
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
       </div>
     `;
-    card.querySelector('.ruler').textContent = ruler;
-    card.querySelector('.ruler').style.color = lead ? '#ffd34d' : 'var(--muted)';
+    card.querySelector('.ruler span').textContent = lead ? lead.rulerName : '—';
     el.appendChild(card);
   });
 }
@@ -399,23 +413,23 @@ function renderInspector() {
   if (selected.kind === 'unit') {
     const u = selected.ref;
     const c = world.civs[u.civ];
-    const crown = u.isLeader ? '👑 ' : '';
-    const role = u.isLeader
-      ? `${RULER_TITLE[c.id] || 'Líder'}`
-      : 'Ciudadano';
-    const name = u.isLeader ? u.rulerName : `${role} de ${c.name.replace('Los ', '')}`;
+    const title = c.title || 'Líder';
+    const name = u.isLeader ? u.rulerName : u.name;
+    const av = avatarDataURL(u.isLeader ? c.leader : (u.name + u.id), c.color, { crown: u.isLeader, size: 52 });
     const dead = u.dead ? `<div class="idead">† Cayó en combate</div>` : '';
-    const reign = u.isLeader ? `<div class="irow"><span>Reinado</span><span>${years(world.tick - u.since)} años</span></div>` : '';
+    const reign = u.isLeader
+      ? `<div class="irow"><span>Reinado</span><span>${years(world.tick - u.since)} años</span></div>` +
+        `<div class="irow"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[u.civ] : 0}</span></div>`
+      : '';
     body.innerHTML = `
       <div class="ihead">
-        <span class="iface" style="background:${c.color}">${crown || '🧍'}</span>
+        <img class="iface-img" alt="" src="${av}" />
         <div>
-          <div class="iname" style="color:${c.color}">${''}</div>
-          <div class="ipart">${c.name}</div>
+          <div class="iname" style="color:${c.color}"></div>
+          <div class="ipart">${u.isLeader ? title + ' · ' : 'Ciudadano/a · '}${c.name}</div>
         </div>
       </div>
       ${dead}
-      <div class="irow"><span>Cargo</span><span>${crown ? (RULER_TITLE[c.id] || 'Líder') : 'Ciudadano'}</span></div>
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
       <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}</span></div>
       ${bar(u.hp / u.maxHp, '#3fd96b')}
@@ -434,7 +448,7 @@ function renderInspector() {
           <div class="ipart">${civ.name}</div>
         </div>
       </div>
-      <div class="irow"><span>Municipio</span><span>${''}</span></div>
+      <div class="irow"><span>Municipio</span><span></span></div>
       <div class="irow"><span>Población</span><span>${Math.round(c.pop)}</span></div>
       <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(c.hp))}/${Math.round(c.maxHp)}</span></div>
       ${bar(c.hp / c.maxHp, '#3fd96b')}

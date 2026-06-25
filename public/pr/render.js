@@ -31,9 +31,15 @@ export function createRenderer(canvas, world) {
   // ---- Camera -----------------------------------------------------------
   let zoom = 1, panX = 0, panY = 0;
   function clampPan() {
-    panX = Math.min(0, Math.max(W * (1 - zoom), panX));
-    panY = Math.min(0, Math.max(H * (1 - zoom), panY));
+    if (zoom <= 1) { // zoomed out: center the map with margin around it
+      panX = (W - W * zoom) / 2;
+      panY = (H - H * zoom) / 2;
+    } else {
+      panX = Math.min(0, Math.max(W * (1 - zoom), panX));
+      panY = Math.min(0, Math.max(H * (1 - zoom), panY));
+    }
   }
+  const MIN_ZOOM = 0.5;
   function clientToCanvas(clientX, clientY) {
     const r = canvas.getBoundingClientRect();
     return { x: ((clientX - r.left) / r.width) * W, y: ((clientY - r.top) / r.height) * H };
@@ -45,7 +51,7 @@ export function createRenderer(canvas, world) {
   function zoomAtClient(clientX, clientY, factor) {
     const c = clientToCanvas(clientX, clientY);
     const wx = (c.x - panX) / zoom, wy = (c.y - panY) / zoom;
-    zoom = Math.max(1, Math.min(8, zoom * factor));
+    zoom = Math.max(MIN_ZOOM, Math.min(8, zoom * factor));
     panX = c.x - wx * zoom; panY = c.y - wy * zoom;
     clampPan();
   }
@@ -57,7 +63,7 @@ export function createRenderer(canvas, world) {
   function zoomByCenter(factor) {
     const cxp = W / 2, cyp = H / 2;
     const wx = (cxp - panX) / zoom, wy = (cyp - panY) / zoom;
-    zoom = Math.max(1, Math.min(8, zoom * factor));
+    zoom = Math.max(MIN_ZOOM, Math.min(8, zoom * factor));
     panX = cxp - wx * zoom; panY = cyp - wy * zoom;
     clampPan();
   }
@@ -209,13 +215,16 @@ export function createRenderer(canvas, world) {
         continue;
       }
       const bob = ((world.tick + u.id) >> 2) & 1;
-      const cx = px + SCALE / 2, top = py + 0.5 + bob;
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(cx - 2, top, 4, SCALE - 0.5);
-      ctx.fillStyle = c.color;
-      ctx.fillRect(cx - 1.4, top + 2, 2.8, SCALE - 2.5); // body
-      ctx.fillStyle = c.colorDark || c.color;
-      ctx.fillRect(cx - 1.4, top, 2.8, 2); // head
+      const cx = px + SCALE / 2, top = py + 0.3 + bob;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)'; // contorno
+      ctx.fillRect(cx - 2, top, 4, SCALE);
+      ctx.fillStyle = '#f1c27d'; // cabeza (piel)
+      ctx.fillRect(cx - 1.5, top, 3, 2.2);
+      ctx.fillStyle = c.color; // cuerpo (color del partido)
+      ctx.fillRect(cx - 1.5, top + 2.2, 3, SCALE - 3.6);
+      ctx.fillStyle = c.colorDark || c.color; // piernas
+      ctx.fillRect(cx - 1.5, top + SCALE - 1.6, 1.3, 1.6);
+      ctx.fillRect(cx + 0.2, top + SCALE - 1.6, 1.3, 1.6);
     }
   }
 
@@ -374,7 +383,7 @@ export function createRenderer(canvas, world) {
     ctx.drawImage(detail, 0, 0);
     ctx.drawImage(muni, 0, 0);
 
-    const detailed = zoom >= 2.2;
+    const detailed = zoom >= 1.4;
     drawFree(detailed);
     drawUnits(detailed);
     drawAnimals(detailed);

@@ -15,7 +15,7 @@ import {
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES,
 } from './map.js';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX } from './civs.js';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
@@ -66,6 +66,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     effects: [], // transient hazards (dragon/ufo/volcano/tornado)
     free: [], // librepensadores — undecided people the parties recruit
     leaders: civs.map(() => null), // the ruler unit of each party
+    recruited: civs.map(() => 0), // librepensadores convencidos por cada partido
     winner: null,
     landCount: 0,
     nextUnitId: 1,
@@ -155,6 +156,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       dead: false,
       isLeader: false,
       rulerName: null,
+      name: CITIZEN_NAMES[(rng() * CITIZEN_NAMES.length) | 0],
       since: 0,
     };
     const ai = t.units.push(u) - 1;
@@ -283,7 +285,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       const prob = Math.min(0.85, bestInf * 0.03 * f.openness);
       if (rng() < prob) {
         const u = spawnUnit(bestCiv, f.x, f.y);
-        if (u) { joined.push(i); if (rng() < 0.04) log(`🧠 Un librepensador se unió a ${t.civs[bestCiv].name}.`, bestCiv); }
+        if (u) { joined.push(i); t.recruited[bestCiv]++; if (rng() < 0.05) log(`🧠 ${u.name} se unió a ${t.civs[bestCiv].name}.`, bestCiv); }
       }
     }
     if (joined.length) { const s = new Set(joined); t.free = t.free.filter((_, i) => !s.has(i)); }

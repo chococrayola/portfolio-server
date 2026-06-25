@@ -119,7 +119,27 @@ export const FLAVOR_EVENTS = [
   { civ: 'any', text: '📉 La Junta de control fiscal aprieta a {civ}.' },
 ];
 
-/** Copia profunda de los partidos para poder editar rasgos en vivo. */
+// Nombres de ciudadanos: figuras boricuas (próceres, artistas, atletas,
+// políticos). Solo nombres, como sabor para la gente que camina por la isla.
+export const CITIZEN_NAMES = [
+  'Roberto Clemente', 'Rita Moreno', 'Pedro Albizu Campos', 'Luis Muñoz Marín',
+  'Ramón Emeterio Betances', 'Eugenio María de Hostos', 'Julia de Burgos',
+  'Lola Rodríguez de Tió', 'José de Diego', 'Felisa Rincón de Gautier',
+  'Rafael Hernández', 'Tito Puente', 'Héctor Lavoe', 'Ismael Rivera',
+  'Cheo Feliciano', 'Bobby Capó', 'Andy Montañez', 'Gilberto Santa Rosa',
+  'Marc Anthony', 'Ricky Martin', 'Chayanne', 'Olga Tañón', 'Ednita Nazario',
+  'Daddy Yankee', 'Bad Bunny', 'Residente', 'Tego Calderón', 'Ozuna',
+  'Wisin', 'Yandel', 'Don Omar', 'iLe', 'Kany García', 'Jennifer López',
+  'Benicio del Toro', 'Raúl Juliá', 'José Ferrer', 'Roselyn Sánchez',
+  'Joaquín Phoenix', 'Esai Morales', 'Carlos Beltrán', 'Iván Rodríguez',
+  'Roberto Alomar', 'Bernie Williams', 'Mónica Puig', 'Gigi Fernández',
+  'Félix Trinidad', 'Miguel Cotto', 'Sila María Calderón', 'Luis A. Ferré',
+  'Rafael Cordero', 'Roberto Cofresí', 'Sylvia Rexach', 'Myrta Silva',
+  'Francisco Oller', 'Rafael Tufiño', 'José Campeche', 'René Marqués',
+  'Giannina Braschi', 'Esmeralda Santiago', 'Jesús Colón', 'Antonia Pantoja',
+  'Nydia Velázquez', 'Sonia Sotomayor', 'Rosario Ferré', 'Tony Croatto',
+];
+
 export function defaultCivs() {
   return CIVS.map((c) => ({
     ...c,
