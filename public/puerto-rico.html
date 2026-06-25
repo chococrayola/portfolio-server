@@ -13,10 +13,16 @@
       <span class="brand">🏝️ Isla de Poder</span>
       <span id="clock" class="clock">—</span>
       <span id="ticker" class="ticker">El mundo despierta…</span>
-      <button id="settingsToggle" class="icon-btn" aria-label="Trait editor">⚙️</button>
+      <button id="settingsToggle" class="icon-btn" aria-label="Editor de rasgos">⚙️</button>
     </div>
     <div id="partyStrip" class="party-strip"></div>
   </header>
+
+  <!-- Crónica: barra de historial a lo ancho, arriba -->
+  <section class="cronica-top">
+    <h2>Crónica de la Isla</h2>
+    <ul id="eventLog" class="event-log"></ul>
+  </section>
 
   <div class="controls">
     <button id="playBtn" class="btn btn-primary">▶ Jugar</button>
@@ -27,34 +33,31 @@
       <input id="speed" type="range" min="1" max="8" step="1" value="3" />
       <span id="speedVal">3×</span>
     </label>
+    <label class="pick">Poder
+      <select id="powerSelect"></select>
+    </label>
+    <label class="pick" id="partyPickWrap">Partido
+      <select id="partySelect"></select>
+    </label>
     <span class="tick">Turno <b id="tickVal">0</b></span>
   </div>
+  <p id="toolHint" class="tool-hint">Elige un poder y toca el mapa.</p>
 
   <main class="layout">
     <section class="board">
       <div class="canvas-wrap">
         <canvas id="world"></canvas>
         <div class="zoom-controls">
-          <button id="zoomIn" class="zoom-btn" aria-label="Zoom in">+</button>
-          <button id="zoomOut" class="zoom-btn" aria-label="Zoom out">−</button>
-          <button id="zoomFit" class="zoom-btn" aria-label="Fit map">⤢</button>
+          <button id="zoomIn" class="zoom-btn" aria-label="Acercar">+</button>
+          <button id="zoomOut" class="zoom-btn" aria-label="Alejar">−</button>
+          <button id="zoomFit" class="zoom-btn" aria-label="Ver todo">⤢</button>
         </div>
         <div id="winBanner" class="win-banner hidden"></div>
-      </div>
-
-      <div class="tools">
-        <div id="civPicker" class="civ-picker"></div>
-        <div id="powerList" class="power-list"></div>
-        <p id="toolHint" class="tool-hint">Elige un poder y toca el mapa.</p>
       </div>
     </section>
 
     <aside class="side">
       <section id="stats" class="stats"></section>
-      <section class="log">
-        <h2>Crónica de la Isla</h2>
-        <ul id="eventLog" class="event-log"></ul>
-      </section>
     </aside>
   </main>
 

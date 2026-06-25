@@ -250,37 +250,44 @@ function showWin() {
   banner.classList.remove('hidden');
 }
 
-// ---- Toolbox -------------------------------------------------------------
-function renderTools() {
-  const picker = $('civPicker');
-  picker.innerHTML = '';
-  civDefs.forEach((c, i) => {
-    const b = document.createElement('button');
-    b.className = 'civ-chip' + (i === selectedCiv ? ' active' : '');
-    b.dataset.civ = c.id;
-    b.textContent = c.name.replace('Los ', '');
-    b.style.color = c.color;
-    b.addEventListener('click', () => { selectedCiv = i; renderTools(); });
-    picker.appendChild(b);
-  });
-
-  const list = $('powerList');
-  list.innerHTML = '';
+// ---- Toolbox (poder + partido en menús desplegables) ---------------------
+function buildToolUI() {
+  const ps = $('powerSelect');
+  ps.innerHTML = '';
   POWERS.forEach((p) => {
-    const b = document.createElement('button');
-    b.className = 'power-btn' + (p.id === tool ? ' active' : '');
-    b.innerHTML = `<span class="ic">${p.icon}</span>${p.label}`;
-    b.addEventListener('click', () => { tool = p.id; updateHint(); renderTools(); });
-    list.appendChild(b);
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = `${p.icon} ${p.label}`;
+    ps.appendChild(o);
   });
+  ps.value = tool;
+
+  const cs = $('partySelect');
+  cs.innerHTML = '';
+  civDefs.forEach((c, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = c.name.replace('Los ', '');
+    cs.appendChild(o);
+  });
+  cs.value = String(selectedCiv);
+  updateToolUI();
+}
+
+function updateToolUI() {
+  const p = POWER_BY_ID[tool];
+  $('partyPickWrap').style.display = p.needsCiv ? '' : 'none';
   updateHint();
 }
 
 function updateHint() {
   const p = POWER_BY_ID[tool];
-  const needsCiv = p.needsCiv ? ` (party: ${civDefs[selectedCiv].name})` : '';
+  const needsCiv = p.needsCiv ? ` (partido: ${civDefs[selectedCiv].name})` : '';
   $('toolHint').textContent = `${p.icon} ${p.label}: ${p.desc}${needsCiv}`;
 }
+
+$('powerSelect').addEventListener('change', (e) => { tool = e.target.value; updateToolUI(); });
+$('partySelect').addEventListener('change', (e) => { selectedCiv = Number(e.target.value); updateHint(); });
 
 function applyTool(clientX, clientY) {
   const { x, y } = renderer.screenToTile(clientX, clientY);
@@ -527,6 +534,6 @@ $('resetTraits').addEventListener('click', () => {
 $('speed').value = speed;
 $('speedVal').textContent = speed + '× · ' + tps() + '/s';
 buildWorld();
-renderTools();
+buildToolUI();
 updatePlayBtn();
 requestAnimationFrame(loop);
