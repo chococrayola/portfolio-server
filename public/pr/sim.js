@@ -13,7 +13,7 @@
 import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
-  municipioAt, MUNI_NAMES,
+  municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
 } from './map.js';
 import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js';
 
@@ -69,7 +69,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     recruited: civs.map(() => 0), // librepensadores convencidos por cada partido
     budget: civs.map(() => 5000), // presupuesto inicial $5,000
     budgetFactor: civs.map(() => 1), // multiplicador de campaña según dinero
-    history: [], // muestras {pop:[],terr:[]} para gráficas
+    kills: civs.map(() => 0), // bajas acumuladas causadas por cada partido
+    prAnchor: civs.map(() => null), // destino en la isla grande (al migrar)
+    history: [], // muestras {pop,terr,budget,free} para gráficas
     winner: null,
     landCount: 0,
     nextUnitId: 1,
@@ -135,11 +137,12 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     return d;
   }
 
-  function spawnUnit(civIndex, x, y) {
+  function spawnUnit(civIndex, x, y, allowSea = false) {
     if (t.units.length >= MAX_UNITS) return null;
-    const spot = inBounds(x, y) && isLand(t.tiles[idx(x, y)]) && t.occ[idx(x, y)] === -1
-      ? { x, y }
-      : freeNeighbor(x, y) || nearestFree(x, y);
+    const okHere = inBounds(x, y) && t.occ[idx(x, y)] === -1 &&
+      (isLand(t.tiles[idx(x, y)]) || allowSea);
+    const spot = okHere ? { x, y }
+      : freeNeighbor(x, y) || (allowSea ? nearestFreeAny(x, y) : nearestFree(x, y));
     if (!spot) return null;
     const c = t.civs[civIndex];
     const maxHp = 12 + c.traits.resilience;
@@ -185,6 +188,20 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     return null;
   }
 
+  // Igual que nearestFree pero acepta mar (para empezar "en botes" en Culebra).
+  function nearestFreeAny(x, y) {
+    for (let r = 1; r < 22; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const nx = x + dx, ny = y + dy;
+          if (inBounds(nx, ny) && t.occ[idx(nx, ny)] === -1) return { x: nx, y: ny };
+        }
+      }
+    }
+    return null;
+  }
+
   function foundCity(civIndex, x, y, startPop = 5) {
     if (t.cities.length >= MAX_CITIES) return null;
     if (!inBounds(x, y) || !isBuildable(t.tiles[idx(x, y)])) return null;
@@ -212,14 +229,23 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   world.foundCity = foundCity;
 
   // ---- Inicio del mundo --------------------------------------------------
+  // Todos los líderes empiezan en (o junto a) Culebra y deben navegar a la
+  // isla grande de Puerto Rico para conquistar y reclutar.
+  const culIdx = MUNI_NAMES.indexOf('Culebra');
+  const CUL = culIdx >= 0
+    ? { x: MUNI_CENTROIDS[culIdx][0], y: MUNI_CENTROIDS[culIdx][1] }
+    : { x: Math.round(COLS * 0.97), y: Math.round(ROWS * 0.33) };
+
   function seed() {
     for (let i = 0; i < N; i++) {
-      const s = starts[i % starts.length];
+      // destino en la isla grande (su "patria" futura)
+      t.prAnchor[i] = nearestLand(t.tiles, starts[i % starts.length].x, starts[i % starts.length].y);
       const st = t.civs[i].start || { units: 6, cityPop: 8 };
-      const city = foundCity(i, s.x, s.y, st.cityPop);
-      if (city) log(`🏙️ ${t.civs[i].name} fundó su capital ${city.name} en ${city.muni}.`, i);
-      for (let k = 0; k < st.units; k++) spawnUnit(i, s.x, s.y);
+      // fuerza inicial alrededor de Culebra (en tierra o en botes en el mar)
+      const total = st.units + 2;
+      for (let k = 0; k < total; k++) spawnUnit(i, CUL.x, CUL.y, true);
     }
+    log('⛵ Los líderes parten desde Culebra rumbo a Puerto Rico.');
     seedAnimals();
     seedFree();
     for (let i = 0; i < N; i++) promoteLeader(i, true);
@@ -354,8 +380,15 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   }
 
   // ---- Targeting --------------------------------------------------------
+  const OFFSHORE_X = Math.round(COLS * 0.82); // islas del este (Vieques/Culebra)
   function retarget(unit) {
     const c = t.civs[unit.civ];
+    // Si aún está en las islas del este, navega hacia su patria en la isla grande.
+    if (unit.x >= OFFSHORE_X && t.prAnchor[unit.civ]) {
+      unit.tx = t.prAnchor[unit.civ].x;
+      unit.ty = t.prAnchor[unit.civ].y;
+      return;
+    }
     const sight = Math.round(4 + c.traits.intelligence * 0.5);
     let enemy = null;
     let enemyDist = Infinity;
@@ -432,9 +465,11 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       const ny = unit.y + dy;
       if (!inBounds(nx, ny)) continue;
       const tile = t.tiles[idx(nx, ny)];
-      if (isOcean(tile)) continue;
+      // Sólo se entra al mar con rumbo fijo (cruzar); al vagar se quedan en tierra.
+      if (isOcean(tile) && !hasTarget) continue;
+      const seaPenalty = isOcean(tile) ? 3 : 0;
       const score = hasTarget
-        ? (nx - unit.tx) ** 2 + (ny - unit.ty) ** 2 + rng() * 0.3
+        ? (nx - unit.tx) ** 2 + (ny - unit.ty) ** 2 + seaPenalty + rng() * 0.3
         : rng();
       if (score < bestScore) {
         bestScore = score;
@@ -488,13 +523,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       unit.x = next.x;
       unit.y = next.y;
       t.occ[ni] = ai;
-      t.owner[ni] = unit.civ;
+      if (isLand(next.tile)) t.owner[ni] = unit.civ; // no se reclama el mar
       maybeFoundCity(unit);
     } else {
       const other = t.units[occupant];
       if (other && other.civ !== unit.civ && t.war[unit.civ][other.civ]) {
         fight(unit, other);
-        if (other.hp <= 0) { unit.kills++; killUnit(occupant); }
+        if (other.hp <= 0) { unit.kills++; t.kills[unit.civ]++; killUnit(occupant); }
       }
       // Friendly or non-war neighbor: stay put this step.
     }
@@ -1127,7 +1162,12 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
     if (t.tick % 10 === 0) updateEconomy();
     if (t.tick % 120 === 0) {
-      t.history.push({ pop: t.stats.map((s) => s.pop), terr: t.stats.map((s) => s.territory) });
+      t.history.push({
+        pop: t.stats.map((s) => s.pop),
+        terr: t.stats.map((s) => s.territory),
+        budget: t.budget.map((b) => Math.round(b)),
+        free: t.free.length,
+      });
       if (t.history.length > 180) t.history.shift();
     }
     if (t.tick % SUMMARY_EVERY === 0 && t.winner === null) summarize();

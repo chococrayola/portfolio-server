@@ -11,7 +11,7 @@
 import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js';
 import { MGRID, OCEAN_ID } from './municipios.js';
 
-const SCALE = 6; // world pixels per tile
+const SCALE = 8; // world pixels per tile (mapa más grande)
 
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -209,9 +209,11 @@ export function createRenderer(canvas, world) {
     for (const u of world.units) {
       const c = world.civs[u.civ];
       const px = u.x * SCALE, py = u.y * SCALE;
+      const onSea = isOcean(world.tiles[idx(u.x, u.y)]);
       if (!detailed) {
         ctx.fillStyle = c.color;
         ctx.fillRect(px + SCALE * 0.2, py + SCALE * 0.2, SCALE * 0.6, SCALE * 0.6);
+        if (onSea) { ctx.fillStyle = '#6b4423'; ctx.fillRect(px + SCALE * 0.1, py + SCALE * 0.7, SCALE * 0.8, SCALE * 0.25); }
         continue;
       }
       const bob = ((world.tick + u.id) >> 2) & 1;
@@ -222,9 +224,20 @@ export function createRenderer(canvas, world) {
       ctx.fillRect(cx - 1.5, top, 3, 2.2);
       ctx.fillStyle = c.color; // cuerpo (color del partido)
       ctx.fillRect(cx - 1.5, top + 2.2, 3, SCALE - 3.6);
-      ctx.fillStyle = c.colorDark || c.color; // piernas
-      ctx.fillRect(cx - 1.5, top + SCALE - 1.6, 1.3, 1.6);
-      ctx.fillRect(cx + 0.2, top + SCALE - 1.6, 1.3, 1.6);
+      if (onSea) {
+        // bote bajo el personaje en el mar
+        ctx.fillStyle = '#6b4423';
+        ctx.beginPath();
+        ctx.moveTo(px + 0.5, py + SCALE - 2.5);
+        ctx.lineTo(px + SCALE - 0.5, py + SCALE - 2.5);
+        ctx.lineTo(px + SCALE - 2, py + SCALE - 0.3);
+        ctx.lineTo(px + 2, py + SCALE - 0.3);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillStyle = c.colorDark || c.color; // piernas
+        ctx.fillRect(cx - 1.5, top + SCALE - 1.6, 1.3, 1.6);
+        ctx.fillRect(cx + 0.2, top + SCALE - 1.6, 1.3, 1.6);
+      }
     }
   }
 
@@ -370,7 +383,6 @@ export function createRenderer(canvas, world) {
 
   function draw() {
     if (terrainDirty) { buildTerrain(); buildDetail(); terrainDirty = false; }
-    buildTerritory();
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
@@ -379,11 +391,11 @@ export function createRenderer(canvas, world) {
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
     ctx.drawImage(terrain, 0, 0, W, H);
-    ctx.drawImage(terr, 0, 0, W, H);
+    // (sin "aura" de territorio: las ciudades cambian de color al ser conquistadas)
     ctx.drawImage(detail, 0, 0);
     ctx.drawImage(muni, 0, 0);
 
-    const detailed = zoom >= 1.4;
+    const detailed = zoom >= 1.1;
     drawFree(detailed);
     drawUnits(detailed);
     drawAnimals(detailed);
