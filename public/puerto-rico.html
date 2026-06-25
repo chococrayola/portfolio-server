@@ -8,12 +8,14 @@
   <link rel="stylesheet" href="puerto-rico.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-row">
-      <h1 class="brand">🏝️ Isla de Poder</h1>
+  <header class="topbar" id="statusBar">
+    <div class="status-main">
+      <span class="brand">🏝️ Isla de Poder</span>
+      <span id="clock" class="clock">—</span>
+      <span id="ticker" class="ticker">El mundo despierta…</span>
       <button id="settingsToggle" class="icon-btn" aria-label="Trait editor">⚙️</button>
     </div>
-    <p class="tagline">A WorldBox-style battle for Puerto Rico: 🔵 PNP · 🔴 PPD · 🟢 Independentistas</p>
+    <div id="partyStrip" class="party-strip"></div>
   </header>
 
   <div class="controls">
