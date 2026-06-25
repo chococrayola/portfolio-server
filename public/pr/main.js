@@ -69,6 +69,7 @@ function buildWorld() {
   renderer.draw();
   renderStats();
   renderLog();
+  renderCharts();
   updateClock();
   updateTicker();
   updatePartyStrip();
@@ -176,6 +177,7 @@ setInterval(() => {
   if (world) {
     renderStats();
     renderLog();
+    renderCharts();
     updateTicker();
     updatePartyStrip();
     if (selected) renderInspector();
@@ -197,12 +199,24 @@ function renderStats() {
       <span>👥 Población <b>${totalPop}</b></span>
       <span>🧠 Indecisos <b>${freeN}</b></span>
     </div>`;
+  // demografía: edad y antigüedad media por partido (una sola pasada)
+  const N = world.civs.length;
+  const ageSum = new Array(N).fill(0), tenSum = new Array(N).fill(0), cnt = new Array(N).fill(0);
+  for (const u of world.units) {
+    ageSum[u.civ] += u.age; tenSum[u.civ] += (world.tick - u.joined); cnt[u.civ]++;
+  }
+  const yrs = (t) => Math.floor(t / 5);
+  const money = (b) => '$' + Math.round(b).toLocaleString('en-US');
+
   // ordenar por territorio (líder primero) para vista tipo ranking
   const order = world.civs.map((_, i) => i).sort((a, b) => world.stats[b].territory - world.stats[a].territory);
   order.forEach((i) => {
     const c = world.civs[i];
     const s = world.stats[i];
     const pct = Math.round((s.territory / land) * 100);
+    const budget = world.budget ? world.budget[i] : 0;
+    const avgAge = cnt[i] ? yrs(ageSum[i] / cnt[i]) : 0;
+    const avgTen = cnt[i] ? yrs(tenSum[i] / cnt[i]) : 0;
     const dead = s.units === 0 && s.cities === 0;
     const lead = world.leaders[i];
     const wars = [];
@@ -225,7 +239,10 @@ function renderStats() {
       <div class="row"><span>Ciudades</span><span>${s.cities}</span></div>
       <div class="row"><span>Territorio</span><span>${pct}%</span></div>
       <div class="bar"><div style="width:${pct}%;background:${c.color}"></div></div>
+      <div class="row"><span>Presupuesto 💰</span><span class="${budget < 0 ? 'neg' : ''}">${money(budget)}</span></div>
       <div class="row"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
+      <div class="row dim"><span>Edad media</span><span>${avgAge} a</span></div>
+      <div class="row dim"><span>Antigüedad media</span><span>${avgTen} a</span></div>
       <div class="tags">
         ${dead ? '<span class="tag dead">eliminado</span>' : ''}
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
@@ -234,6 +251,58 @@ function renderStats() {
     card.querySelector('.ruler span').textContent = lead ? lead.rulerName : '—';
     el.appendChild(card);
   });
+}
+
+// ---- Gráficas (canvas) ---------------------------------------------------
+function renderCharts() {
+  // 1) población por partido a través del tiempo (líneas)
+  const pc = $('popChart');
+  if (pc) {
+    const x = pc.getContext('2d');
+    const W = pc.width, H = pc.height;
+    x.clearRect(0, 0, W, H);
+    const hist = world.history || [];
+    if (hist.length >= 2) {
+      let max = 1;
+      for (const h of hist) for (const p of h.pop) if (p > max) max = p;
+      for (let ci = 0; ci < world.civs.length; ci++) {
+        x.strokeStyle = world.civs[ci].color;
+        x.lineWidth = 1.6;
+        x.beginPath();
+        hist.forEach((h, k) => {
+          const px = (k / (hist.length - 1)) * (W - 4) + 2;
+          const py = H - 3 - (h.pop[ci] / max) * (H - 6);
+          if (k) x.lineTo(px, py); else x.moveTo(px, py);
+        });
+        x.stroke();
+      }
+    } else {
+      x.fillStyle = '#5b6b7a';
+      x.font = '12px system-ui, sans-serif';
+      x.fillText('Recopilando datos…', 8, H / 2);
+    }
+  }
+  // 2) distribución de edades de toda la población (barras)
+  const ac = $('ageChart');
+  if (ac) {
+    const x = ac.getContext('2d');
+    const W = ac.width, H = ac.height;
+    x.clearRect(0, 0, W, H);
+    const B = 10, buckets = new Array(B).fill(0);
+    let maxAge = 1;
+    for (const u of world.units) if (u.age > maxAge) maxAge = u.age;
+    for (const u of world.units) {
+      const b = Math.min(B - 1, Math.floor((u.age / (maxAge + 1)) * B));
+      buckets[b]++;
+    }
+    const maxB = Math.max(1, ...buckets);
+    const bw = W / B;
+    for (let i = 0; i < B; i++) {
+      const bh = (buckets[i] / maxB) * (H - 4);
+      x.fillStyle = '#f4b942';
+      x.fillRect(i * bw + 1, H - bh, bw - 2, bh);
+    }
+  }
 }
 
 function renderLog() {
@@ -431,6 +500,7 @@ function renderInspector() {
       </div>
       ${dead}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
+      <div class="irow"><span>En el partido</span><span>${years(world.tick - u.joined)} años</span></div>
       <div class="irow"><span>Salud</span><span>${Math.max(0, Math.round(u.hp))}/${Math.round(u.maxHp)}</span></div>
       ${bar(u.hp / u.maxHp, '#3fd96b')}
       <div class="irow"><span>Bajas</span><span>⚔ ${u.kills}</span></div>
