@@ -82,6 +82,15 @@ body {
   cursor: pointer;
 }
 
+/* Crónica: barra de historial a lo ancho, arriba */
+.cronica-top {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 16px 4px;
+}
+.cronica-top h2 { font-size: 0.9rem; margin: 0 0 4px; color: var(--muted); }
+.cronica-top .event-log { max-height: 150px; }
+
 /* Controls */
 .controls {
   display: flex;
@@ -92,6 +101,18 @@ body {
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
+.pick { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; }
+.pick select {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 9px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  max-width: 200px;
+}
+.tool-hint { color: var(--muted); font-size: 0.82rem; margin: 8px 16px 0; }
 .btn {
   border: none;
   border-radius: 10px;

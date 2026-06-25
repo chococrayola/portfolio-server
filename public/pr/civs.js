@@ -43,7 +43,7 @@ export const CIVS = [
   },
   {
     id: 'mvc',
-    name: 'Victoria Ciudadana',
+    name: 'MVC',
     full: 'Movimiento Victoria Ciudadana',
     leader: 'Manuel Natal',
     title: 'Líder',
@@ -59,7 +59,7 @@ export const CIVS = [
   },
   {
     id: 'ind',
-    name: 'Los Independentistas',
+    name: 'PIP',
     full: 'Partido Independentista Puertorriqueño',
     leader: 'Juan Dalmau',
     title: 'Líder',
