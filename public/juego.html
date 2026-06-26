@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1c5e8c" />
   <title>Isla de Poder — Simulación de Puerto Rico</title>
-  <link rel="stylesheet" href="puerto-rico.css?v=21" />
+  <link rel="stylesheet" href="puerto-rico.css?v=22" />
 </head>
 <body>
   <header class="topbar" id="statusBar">
     <div class="status-main">
       <span class="brand">🏝️ Isla de Poder</span>
-      <span class="ver">v21</span>
+      <span class="ver">v22</span>
       <span id="clock" class="clock">—</span>
       <span id="ticker" class="ticker">El mundo despierta…</span>
       <button id="settingsToggle" class="icon-btn" aria-label="Editor de rasgos">⚙️</button>
@@ -38,33 +38,39 @@
   </div>
   <p id="toolHint" class="tool-hint">Elige un poder y toca el mapa.</p>
 
-  <main class="board">
-    <div class="canvas-wrap">
-      <canvas id="world"></canvas>
-      <div class="zoom-controls">
-        <button id="zoomIn" class="zoom-btn" aria-label="Acercar">+</button>
-        <button id="zoomOut" class="zoom-btn" aria-label="Alejar">−</button>
-        <button id="zoomFit" class="zoom-btn" aria-label="Ver todo">⤢</button>
+  <!-- Tablero tipo dashboard: mapa + paneles al lado -->
+  <div class="game">
+    <main class="board">
+      <div class="canvas-wrap">
+        <canvas id="world"></canvas>
+        <div class="zoom-controls">
+          <button id="zoomIn" class="zoom-btn" aria-label="Acercar">+</button>
+          <button id="zoomOut" class="zoom-btn" aria-label="Alejar">−</button>
+          <button id="zoomFit" class="zoom-btn" aria-label="Ver todo">⤢</button>
+        </div>
+        <div id="winBanner" class="win-banner hidden"></div>
       </div>
-      <div id="winBanner" class="win-banner hidden"></div>
-    </div>
-  </main>
+    </main>
 
-  <!-- Tablero debajo del mapa -->
-  <section class="dashboard">
-    <h2 class="dash-title">Tablero de líderes</h2>
-    <div id="stats" class="stats"></div>
+    <!-- Tarjetas de líderes (columna derecha en pantallas anchas) -->
+    <section class="side-stats">
+      <h2 class="dash-title">Tablero de líderes</h2>
+      <div id="stats" class="stats"></div>
+    </section>
 
-    <h2 class="dash-title">Segundos al mando</h2>
-    <div id="deputies" class="deputies"></div>
+    <!-- Paneles anchos: segundos, historia y gráficas (debajo del mapa) -->
+    <section class="left-wide">
+      <h2 class="dash-title">Segundos al mando</h2>
+      <div id="deputies" class="deputies"></div>
 
-    <h2 class="dash-title">Historia</h2>
-    <ul id="eventLog" class="event-log big"></ul>
+      <h2 class="dash-title">Historia</h2>
+      <ul id="eventLog" class="event-log big"></ul>
 
-    <h2 class="dash-title">Gráficas en vivo</h2>
-    <div id="chartLegend" class="chart-legend"></div>
-    <div id="chartsGrid" class="charts-grid"></div>
-  </section>
+      <h2 class="dash-title">Gráficas en vivo · evolución en el tiempo</h2>
+      <div id="chartLegend" class="chart-legend"></div>
+      <div id="chartsGrid" class="charts-grid"></div>
+    </section>
+  </div>
 
   <!-- Character / city inspector -->
   <div id="inspector" class="inspector hidden">
@@ -85,6 +91,6 @@
     </div>
   </div>
 
-  <script type="module" src="pr/main.js?v=21"></script>
+  <script type="module" src="pr/main.js?v=22"></script>
 </body>
 </html>

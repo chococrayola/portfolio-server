@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=21';
-import { defaultCivs } from './civs.js?v=21';
-import { createWorld } from './sim.js?v=21';
-import { createRenderer } from './render.js?v=21';
-import { POWERS, POWER_BY_ID } from './powers.js?v=21';
-import { avatarDataURL } from './avatar.js?v=21';
+import { generateMap } from './map.js?v=22';
+import { defaultCivs } from './civs.js?v=22';
+import { createWorld } from './sim.js?v=22';
+import { createRenderer } from './render.js?v=22';
+import { POWERS, POWER_BY_ID } from './powers.js?v=22';
+import { avatarDataURL } from './avatar.js?v=22';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -212,7 +212,10 @@ setInterval(() => {
   if (world) {
     renderStats();
     renderDeputies();
-    renderLog();
+    // Only rebuild the history list when the reader is at the top; otherwise
+    // the periodic rebuild would yank the scroll position back up.
+    const lg = $('eventLog');
+    if (!lg || lg.scrollTop <= 6) renderLog();
     renderCharts();
     updateTicker();
     updatePartyStrip();
@@ -228,6 +231,12 @@ function updatePlayBtn() {
 function renderStats() {
   const el = $('stats');
   const land = world.landCount || 1;
+  // Preserve any open alcalde-list scroll positions across the rebuild.
+  const prevScroll = {};
+  el.querySelectorAll('.civ-card').forEach((card) => {
+    const ul = card.querySelector('.hr-alc');
+    if (ul) prevScroll[card.dataset.civ] = ul.scrollTop;
+  });
   el.innerHTML = '';
   // demografía: edad y antigüedad media por partido (una sola pasada)
   const N = world.civs.length;
@@ -307,6 +316,8 @@ function renderStats() {
     `;
     card.dataset.civ = i;
     card.querySelector('.ruler span').textContent = lead ? lead.rulerName : '—';
+    const ul = card.querySelector('.hr-alc');
+    if (ul && prevScroll[i] != null) ul.scrollTop = prevScroll[i];
     el.appendChild(card);
   });
 }
@@ -370,7 +381,7 @@ function buildCharts() {
   CHART_DEFS.forEach((d) => {
     const card = document.createElement('div');
     card.className = 'chart-card';
-    card.innerHTML = `<h4>${d.title}</h4><canvas id="${d.id}" width="180" height="96"></canvas>`;
+    card.innerHTML = `<h4>${d.title}</h4><canvas id="${d.id}" width="240" height="132"></canvas>`;
     grid.appendChild(card);
   });
 }

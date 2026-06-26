@@ -12,7 +12,7 @@
  *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, idx, isOcean, isLand } from './map.js?v=21';
+import { COLS, ROWS, TILE, idx, isOcean, isLand } from './map.js?v=22';
 
 // --- Isometric tile metrics ----------------------------------------------
 const TW = 14;          // tile width in world px
