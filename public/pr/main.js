@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=20';
-import { defaultCivs } from './civs.js?v=20';
-import { createWorld } from './sim.js?v=20';
-import { createRenderer } from './render.js?v=20';
-import { POWERS, POWER_BY_ID } from './powers.js?v=20';
-import { avatarDataURL } from './avatar.js?v=20';
+import { generateMap } from './map.js?v=21';
+import { defaultCivs } from './civs.js?v=21';
+import { createWorld } from './sim.js?v=21';
+import { createRenderer } from './render.js?v=21';
+import { POWERS, POWER_BY_ID } from './powers.js?v=21';
+import { avatarDataURL } from './avatar.js?v=21';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -256,6 +256,23 @@ function renderStats() {
     const succNote = slog.length > 0
       ? `<div class="succ-note">⚰️ Nueva toma: ${formatStamp(slog[slog.length - 1].tick)}</div>`
       : '';
+    // Jerarquía: Líder → Segundo al mando → un Alcalde por ciudad (con su valor).
+    const dep = world.deputy[i];
+    const depName = (dep && !dep.dead) ? dep.name : '—';
+    const myCities = world.cities.filter((cc) => cc.civ === i);
+    const alcaldeRows = myCities.length
+      ? myCities.map((cc) =>
+          `<li><span class="al-city">🏛️ ${cc.name}</span>` +
+          `<span class="al-who">${cc.alcalde || '—'}</span>` +
+          `<span class="al-worth">${money(cc.worth || 0)}</span></li>`).join('')
+      : '<li class="dim">Sin ciudades todavía</li>';
+    const hierarchy = `
+      <div class="hierarchy">
+        <div class="hr-row"><span class="hr-rank">👑 Líder</span><span class="hr-name">${lead ? lead.rulerName : '—'}</span></div>
+        <div class="hr-row"><span class="hr-rank">🎖️ Segundo al mando</span><span class="hr-name">${depName}</span></div>
+        <div class="hr-alc-h">🏛️ Alcaldes · ${myCities.length}</div>
+        <ul class="hr-alc">${alcaldeRows}</ul>
+      </div>`;
     const card = document.createElement('div');
     card.className = 'civ-card';
     card.style.borderLeftColor = c.color;
@@ -274,9 +291,11 @@ function renderStats() {
       <div class="row"><span>Territorio</span><span>${pct}%</span></div>
       <div class="bar"><div style="width:${pct}%;background:${c.color}"></div></div>
       <div class="row"><span>Presupuesto 💰</span><span class="${budget < 0 ? 'neg' : ''}">${money(budget)}</span></div>
+      <div class="row dim"><span>(suma del valor de sus ciudades)</span><span></span></div>
       <div class="row"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
       <div class="row dim"><span>Edad media</span><span>${avgAge} a</span></div>
       <div class="row dim"><span>Bajas ⚔</span><span>${world.kills ? world.kills[i] : 0}</span></div>
+      ${hierarchy}
       <div class="tags">
         ${dead ? '<span class="tag dead">eliminado</span>' : ''}
         ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}

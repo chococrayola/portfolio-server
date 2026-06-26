@@ -14,8 +14,8 @@ import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=20';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=20';
+} from './map.js?v=21';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=21';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
@@ -68,7 +68,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     leaders: civs.map(() => null), // the ruler unit of each party
     deputy: civs.map(() => null), // segundo al mando (tras conquistar/fundar ciudad)
     recruited: civs.map(() => 0), // librepensadores convencidos por cada partido
-    budget: civs.map(() => 5000), // presupuesto inicial $5,000
+    budget: civs.map(() => 0), // presupuesto = suma del valor de sus ciudades
     budgetFactor: civs.map(() => 1), // multiplicador de campaña según dinero
     kills: civs.map(() => 0), // bajas acumuladas causadas por cada partido
     killLog: civs.map(() => []),      // historial de bajas del líder por partido (max 16)
@@ -229,10 +229,24 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       besieged: false,
       flash: 30, // destello al fundarse/descubrirse
       siegeBy: new Array(N).fill(0),
+      worth: cityBaseWorth(x, y), // valor económico (distinto por ciudad)
+      alcalde: pickCitizen(), // alcalde/sa que la administra
+      alcaldeSince: t.tick,
     };
     t.cities.push(city);
     return city;
   }
+
+  // Valor base de una ciudad según su terreno + variación (cada una distinta).
+  const TERR_WORTH = {
+    [TILE.URBAN]: 1.9, [TILE.BEACH]: 1.2, [TILE.GRASS]: 1.0,
+    [TILE.FOREST]: 0.85, [TILE.HILL]: 0.8, [TILE.MOUNTAIN]: 0.6,
+  };
+  function cityBaseWorth(x, y) {
+    const m = TERR_WORTH[tileAt(x, y)] || 1;
+    return Math.round((900 + rng() * 1500) * m);
+  }
+  function pickCitizen() { return CITIZEN_NAMES[(rng() * CITIZEN_NAMES.length) | 0]; }
   world.foundCity = foundCity;
 
   // ---- Inicio del mundo --------------------------------------------------
@@ -333,24 +347,19 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     if (t.free.length) t.free = t.free.filter((f) => Math.hypot(f.x - cx, f.y - cy) > r);
   }
 
-  // ---- Economía: presupuesto que sube y baja según el uso ---------------
-  const broke = civs.map(() => false);
+  // ---- Economía: cada ciudad tiene un valor; el presupuesto del partido es
+  // la suma del valor de las ciudades que posee. El valor crece con la
+  // población y la inercia (momentum) del partido. ----------------------
   function updateEconomy() {
+    for (const c of t.cities) {
+      c.worth = Math.min(9000, (c.worth || 0) + c.pop * 1.1 * t.momentum[c.civ]);
+    }
     for (let i = 0; i < N; i++) {
-      const s = t.stats[i];
-      const income = s.cities * 8 + s.pop * 0.6 + s.territory * 0.12;
-      const upkeep = s.units * 0.8; // mantener seguidores cuesta
-      // la corrupción drena las arcas (más en los más brutales)
-      const corr = t.civs[i].traits.brutality > 7 ? t.budget[i] * 0.03
-        : (t.budget[i] > 0 ? t.budget[i] * 0.004 : 0);
-      t.budget[i] += income - upkeep - corr;
-      if (t.budget[i] < -3000) t.budget[i] = -3000;
-      if (t.budget[i] > 50000) t.budget[i] = 50000;
+      let sum = 0;
+      for (const c of t.cities) if (c.civ === i) sum += c.worth;
+      t.budget[i] = Math.round(sum);
       const b = t.budget[i];
-      t.budgetFactor[i] = b > 0 ? 1 + Math.min(0.6, b / 8000) : 0.4;
-      // historia: quiebra / recuperación
-      if (b < 0 && !broke[i]) { broke[i] = true; log(`💸 ${t.civs[i].name} entra en quiebra; sus campañas se frenan.`, i); }
-      else if (b > 800 && broke[i]) { broke[i] = false; log(`💵 ${t.civs[i].name} sanea sus finanzas.`, i); }
+      t.budgetFactor[i] = b > 0 ? 1 + Math.min(0.7, b / 14000) : 0.5;
     }
   }
 
@@ -641,13 +650,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       // Growth (the territorial leader's economy snowballs via momentum).
       city.pop += 0.045 * c.traits.growth * GROWTH_MOD[tile] * t.momentum[city.civ];
       if (city.pop > 45) city.pop = 45;
-      // Spawn a citizen when ripe — cuesta dinero de campaña.
-      if (city.pop >= 7 && t.units.length < MAX_UNITS && t.budget[city.civ] > 40) {
+      // Spawn a citizen when ripe — invierte parte del valor de la ciudad.
+      if (city.pop >= 7 && t.units.length < MAX_UNITS && city.worth > 240) {
         const spot = freeNeighbor(city.x, city.y);
         if (spot) {
           spawnUnit(city.civ, spot.x, spot.y);
           city.pop -= 4;
-          t.budget[city.civ] -= 40;
+          city.worth -= 70;
         }
       }
       // Regenerate only when not under active siege.
@@ -666,6 +675,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
           city.pop = Math.max(3, city.pop * 0.5);
           city.loyalty = 55;
           city.flash = 45; // destello al cambiar de color
+          city.worth = Math.max(300, Math.round(city.worth * 0.5)); // saqueada
+          city.alcalde = pickCitizen(); // nuevo alcalde del captor
+          city.alcaldeSince = t.tick;
           t.owner[idx(city.x, city.y)] = captor;
         } else {
           log(`💥 ¡${city.name} (${city.muni}) de ${c.name} fue saqueada y arrasada!`, city.civ);
@@ -705,6 +717,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         const oldName = t.civs[city.civ].name;
         city.civ = flipTo;
         city.loyalty = 60;
+        city.alcalde = pickCitizen();
+        city.alcaldeSince = t.tick;
         log(`🔥 ¡${city.name} se rebela y abandona a ${oldName} por ${t.civs[flipTo].name}!`, flipTo);
       }
     }

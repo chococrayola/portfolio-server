@@ -258,6 +258,20 @@ body {
 .dep-hist { list-style: none; margin: 0; padding: 4px 0 0; border-top: 1px solid var(--line); }
 .dep-hist-item { font-size: 0.68rem; color: var(--muted); padding: 1px 0; display: flex; justify-content: space-between; }
 .succ-note { font-size: 0.7rem; color: #ff8d8d; background: rgba(180,50,50,0.13); border-radius: 6px; padding: 3px 7px; margin: 0 0 5px; }
+
+/* Jerarquía de liderazgo en la tarjeta */
+.hierarchy { margin: 8px 0 4px; border-top: 1px solid var(--line); padding-top: 7px; }
+.hr-row { display: flex; justify-content: space-between; gap: 6px; font-size: 0.78rem; padding: 2px 0; }
+.hr-rank { color: var(--muted); }
+.hr-name { font-weight: 700; text-align: right; }
+.hr-alc-h { font-size: 0.72rem; color: var(--muted); font-weight: 700; margin: 6px 0 3px; }
+.hr-alc { list-style: none; margin: 0; padding: 0; max-height: 132px; overflow-y: auto; }
+.hr-alc li { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: baseline;
+  font-size: 0.74rem; padding: 2px 0; border-bottom: 1px solid rgba(43,58,74,0.5); }
+.hr-alc li:last-child { border-bottom: none; }
+.hr-alc .al-city { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hr-alc .al-who { color: var(--muted); white-space: nowrap; }
+.hr-alc .al-worth { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
 .card-status {
   font-size: 0.74rem;
   font-weight: 700;

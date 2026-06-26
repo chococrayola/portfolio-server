@@ -1,39 +1,98 @@
-/* render.js — draws the world to a canvas with crisp pixel scaling, a zoomable
- * camera, and WorldBox-flavored pixel sprites.
+/* render.js — isometric renderer.
  *
- * Layers (bottom→top): terrain (cached) → territory fill (cached) → terrain
- * detail (trees/peaks/waves, cached) → municipio borders+labels (cached) →
- * units (little people) → animals → cities (buildings) → live effects
- * (dragon/UFO/tornado/volcano). Everything is drawn in "world pixels" under a
- * camera transform so pinch-zoom stays crisp.
+ * Draws the world in 2:1 isometric. The terrain is baked once into an offscreen
+ * canvas as raised "slabs" (coastal cliffs, elevated hills/mountains/forest);
+ * units, free-thinkers, animals, cities and live effects are drawn each frame
+ * as little iso sprites, depth-sorted back-to-front. A smoothed camera (zoom +
+ * pan) maps the iso world into the visible canvas, and screenToTile inverts the
+ * projection so tap-to-inspect and god-powers land on the right tile.
+ *
+ * Public API (unchanged so main.js keeps working):
+ *   draw, markTerrainDirty, screenToTile, zoomAtClient, zoomByCenter,
+ *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=20';
-import { MGRID, OCEAN_ID } from './municipios.js?v=20';
+import { COLS, ROWS, TILE, idx, isOcean, isLand } from './map.js?v=21';
 
-const SCALE = 8; // world pixels per tile (mapa más grande)
+// --- Isometric tile metrics ----------------------------------------------
+const TW = 14;          // tile width in world px
+const TH = TW / 2;      // tile height (2:1 iso)
+const EH = TW / 4;      // px per elevation unit
+const SLAB = 2.4;       // land base thickness (coastal cliff height, in units)
+const MAXELEV = SLAB + 2.6; // reserve vertical room (so volcanoes never clip)
+const HW = TW / 2, HH = TH / 2;
+const SCALE = TW;       // exported for compatibility
 
-function hexToRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+function elevOf(t) {
+  switch (t) {
+    case TILE.OCEAN: return 0;
+    case TILE.BEACH: return SLAB + 0.0;
+    case TILE.GRASS: return SLAB + 0.25;
+    case TILE.HILL: return SLAB + 1.1;
+    case TILE.MOUNTAIN: return SLAB + 2.3;
+    case TILE.FOREST: return SLAB + 0.6;
+    case TILE.URBAN: return SLAB + 0.35;
+    default: return SLAB;
+  }
 }
-function hash(x, y) {
-  const n = Math.sin(x * 53.7 + y * 19.3) * 43758.5453;
-  return n - Math.floor(n);
+const TOP = {
+  [TILE.BEACH]: '#efdca0', [TILE.GRASS]: '#7cc24f', [TILE.HILL]: '#5b9a3d',
+  [TILE.MOUNTAIN]: '#9a8b73', [TILE.FOREST]: '#2f7a3a', [TILE.URBAN]: '#b9bfc5',
+};
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  r = Math.max(0, Math.min(255, r * f)) | 0;
+  g = Math.max(0, Math.min(255, g * f)) | 0;
+  b = Math.max(0, Math.min(255, b * f)) | 0;
+  return `rgb(${r},${g},${b})`;
 }
 
 export function createRenderer(canvas, world) {
-  const W = (canvas.width = COLS * SCALE);
-  const H = (canvas.height = ROWS * SCALE);
+  // World-space iso coordinates (before the origin offset).
+  const isoX = (x, y) => (x - y) * HW;
+  const isoY = (x, y, e) => (x + y) * HH - e * EH;
+
+  // ---- Iso world bounds → canvas size + origin --------------------------
+  let originX = 0, originY = 0;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!isLand(world.tiles[idx(x, y)])) continue;
+      const sx = isoX(x, y);
+      const sTop = isoY(x, y, MAXELEV); // reserve room for tall peaks
+      const sBot = isoY(x, y, 0) + TH;
+      if (sx - HW < minX) minX = sx - HW;
+      if (sx + HW > maxX) maxX = sx + HW;
+      if (sTop - HH < minY) minY = sTop - HH;
+      if (sBot > maxY) maxY = sBot;
+    }
+  }
+  if (!isFinite(minX)) { minX = 0; maxX = COLS * HW; minY = 0; maxY = ROWS * HH; }
+  const PAD = 80;
+  const W = (canvas.width = Math.ceil(maxX - minX) + PAD * 2);
+  const H = (canvas.height = Math.ceil(maxY - minY) + PAD * 2);
+  originX = -minX + PAD;
+  originY = -minY + PAD;
+
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  // ---- Camera (con suavizado) -------------------------------------------
-  // "current" es lo que se dibuja; "target" es a donde queremos llegar. Cada
-  // cuadro el current se desliza hacia el target → zoom/desplazamiento suaves.
+  // Screen anchor (top-center of a tile's top diamond, at its elevation).
+  function anchor(x, y) {
+    const t = world.tiles[idx(x, y)];
+    const e = isLand(t) ? elevOf(t) : 0;
+    return { sx: originX + isoX(x, y), sy: originY + isoY(x, y, e) };
+  }
+  // Fractional version for effects (off-grid positions, at sea level + hover).
+  function anchorF(fx, fy, e = 0) {
+    return { sx: originX + (fx - fy) * HW, sy: originY + (fx + fy) * HH - e * EH };
+  }
+
+  // ---- Camera (smoothed) ------------------------------------------------
   let zoom = 1, panX = 0, panY = 0;
   let zT = 1, pTx = 0, pTy = 0;
-  const MIN_ZOOM = 0.4;
+  const MIN_ZOOM = 0.4, MAX_ZOOM = 8;
   function clampTarget() {
     if (zT <= 1) { pTx = (W - W * zT) / 2; pTy = (H - H * zT) / 2; }
     else {
@@ -54,14 +113,21 @@ export function createRenderer(canvas, world) {
     const r = canvas.getBoundingClientRect();
     return { x: ((clientX - r.left) / r.width) * W, y: ((clientY - r.top) / r.height) * H };
   }
+  // Inverse iso projection. Picks at the land base elevation (SLAB) since that
+  // is where almost everything the player taps lives; tall peaks are slightly
+  // off but close enough for selection / power placement.
   function screenToTile(clientX, clientY) {
     const c = clientToCanvas(clientX, clientY);
-    return { x: Math.floor((c.x - panX) / zoom / SCALE), y: Math.floor((c.y - panY) / zoom / SCALE) };
+    const wx = (c.x - panX) / zoom - originX;
+    const wy = (c.y - panY) / zoom - originY + SLAB * EH;
+    const fx = wx / TW + wy / TH;
+    const fy = wy / TH - wx / TW;
+    return { x: Math.floor(fx), y: Math.floor(fy) };
   }
   function zoomAtClient(clientX, clientY, factor) {
     const c = clientToCanvas(clientX, clientY);
     const wx = (c.x - pTx) / zT, wy = (c.y - pTy) / zT;
-    zT = Math.max(MIN_ZOOM, Math.min(8, zT * factor));
+    zT = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zT * factor));
     pTx = c.x - wx * zT; pTy = c.y - wy * zT;
     clampTarget();
   }
@@ -73,354 +139,275 @@ export function createRenderer(canvas, world) {
   function zoomByCenter(factor) {
     const cxp = W / 2, cyp = H / 2;
     const wx = (cxp - pTx) / zT, wy = (cyp - pTy) / zT;
-    zT = Math.max(MIN_ZOOM, Math.min(8, zT * factor));
+    zT = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zT * factor));
     pTx = cxp - wx * zT; pTy = cyp - wy * zT;
     clampTarget();
   }
   function fit() { zT = 1; pTx = 0; pTy = 0; }
   function getZoom() { return zoom; }
-  // Centra la cámara en una casilla (para "ir al líder").
   function focusOn(tx, ty, z) {
     zT = Math.max(z || 3, MIN_ZOOM);
-    const wx = tx * SCALE + SCALE / 2, wy = ty * SCALE + SCALE / 2;
-    pTx = W / 2 - wx * zT; pTy = H / 2 - wy * zT;
+    const a = anchor(tx, ty);
+    pTx = W / 2 - a.sx * zT; pTy = H / 2 - a.sy * zT;
     clampTarget();
   }
 
-  // ---- Offscreen 1px/tile layers ---------------------------------------
+  // ---- Terrain bake (iso slabs) -----------------------------------------
   const terrain = document.createElement('canvas');
-  terrain.width = COLS; terrain.height = ROWS;
+  terrain.width = W; terrain.height = H;
   const tctx = terrain.getContext('2d');
-  const terrainImg = tctx.createImageData(COLS, ROWS);
-
-  const terr = document.createElement('canvas');
-  terr.width = COLS; terr.height = ROWS;
-  const terrCtx = terr.getContext('2d');
-  const terrImg = terrCtx.createImageData(COLS, ROWS);
-
-  // Full-res cached layers (detail + municipio overlay).
-  const detail = document.createElement('canvas');
-  detail.width = W; detail.height = H;
-  const muni = document.createElement('canvas');
-  muni.width = W; muni.height = H;
-
-  const civRgb = world.civs.map((c) => hexToRgb(c.color));
-  const tileRgb = {};
-  for (const k of Object.keys(TILE_COLOR)) tileRgb[k] = hexToRgb(TILE_COLOR[k]);
-
   let terrainDirty = true;
 
-  function buildTerrain() {
-    const d = terrainImg.data;
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const i = idx(x, y);
-        const [r, g, b] = tileRgb[world.tiles[i]];
-        const j = ((hash(x + 3, y + 7) * 22) | 0) - 11; // shade jitter for texture
-        const p = i * 4;
-        d[p] = Math.max(0, Math.min(255, r + j));
-        d[p + 1] = Math.max(0, Math.min(255, g + j));
-        d[p + 2] = Math.max(0, Math.min(255, b + j));
-        d[p + 3] = 255;
-      }
-    }
-    tctx.putImageData(terrainImg, 0, 0);
-  }
-
-  function drawTree(d, cx, by, r) {
-    d.fillStyle = '#5a3a1e';
-    d.fillRect(cx - 0.5, by - r * 0.3, 1.2, r * 0.6);
-    d.fillStyle = '#246b2a';
+  function bakeTile(d, x, y) {
+    const t = world.tiles[idx(x, y)];
+    if (!isLand(t)) return;
+    const e = elevOf(t);
+    const cx = originX + isoX(x, y);
+    const topY = originY + isoY(x, y, e);
+    const baseY = originY + isoY(x, y, 0) + TH;
+    const top = TOP[t] || '#7cc24f';
+    const j = ((x * 53 + y * 131) % 7) / 100 - 0.03; // per-tile jitter
+    // left face
+    d.fillStyle = shade(top, 0.6 + j);
     d.beginPath();
-    d.moveTo(cx, by - r);
-    d.lineTo(cx - r * 0.65, by);
-    d.lineTo(cx + r * 0.65, by);
-    d.closePath();
-    d.fill();
-  }
-
-  function buildDetail() {
-    const d = detail.getContext('2d');
-    d.clearRect(0, 0, W, H);
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const tl = world.tiles[idx(x, y)];
-        const px = x * SCALE, py = y * SCALE;
-        const h = hash(x, y);
-        if (tl === TILE.FOREST) {
-          drawTree(d, px + SCALE * 0.32, py + SCALE * 0.7, SCALE * 0.55);
-          if (h > 0.45) drawTree(d, px + SCALE * 0.72, py + SCALE * 0.5, SCALE * 0.48);
-        } else if (tl === TILE.MOUNTAIN) {
-          d.fillStyle = '#6e604e';
-          d.beginPath();
-          d.moveTo(px, py + SCALE);
-          d.lineTo(px + SCALE / 2, py + SCALE * 0.12);
-          d.lineTo(px + SCALE, py + SCALE);
-          d.closePath();
-          d.fill();
-          d.fillStyle = '#e3ddd0';
-          d.beginPath();
-          d.moveTo(px + SCALE * 0.36, py + SCALE * 0.46);
-          d.lineTo(px + SCALE / 2, py + SCALE * 0.12);
-          d.lineTo(px + SCALE * 0.64, py + SCALE * 0.46);
-          d.closePath();
-          d.fill();
-        } else if (tl === TILE.HILL) {
-          if (h > 0.62) { d.fillStyle = 'rgba(0,0,0,0.10)'; d.fillRect(px + SCALE * 0.3, py + SCALE * 0.5, SCALE * 0.4, SCALE * 0.3); }
-        } else if (tl === TILE.OCEAN) {
-          if (h > 0.88) { d.fillStyle = 'rgba(255,255,255,0.16)'; d.fillRect(px + 1, py + SCALE * 0.5, SCALE * 0.6, 1); }
-        }
-      }
+    d.moveTo(cx - HW, topY); d.lineTo(cx, topY + HH);
+    d.lineTo(cx, baseY); d.lineTo(cx - HW, baseY - HH);
+    d.closePath(); d.fill();
+    // right face
+    d.fillStyle = shade(top, 0.78 + j);
+    d.beginPath();
+    d.moveTo(cx + HW, topY); d.lineTo(cx, topY + HH);
+    d.lineTo(cx, baseY); d.lineTo(cx + HW, baseY - HH);
+    d.closePath(); d.fill();
+    // top diamond
+    d.fillStyle = shade(top, 1.0 + j);
+    d.beginPath();
+    d.moveTo(cx, topY - HH); d.lineTo(cx + HW, topY);
+    d.lineTo(cx, topY + HH); d.lineTo(cx - HW, topY);
+    d.closePath(); d.fill();
+    // decorations
+    if (t === TILE.MOUNTAIN && ((x * 31 + y * 17) % 5) < 2) {
+      d.fillStyle = '#f4f6fb';
+      d.beginPath();
+      d.moveTo(cx, topY - HH * 0.5); d.lineTo(cx + HW * 0.32, topY);
+      d.lineTo(cx - HW * 0.32, topY); d.closePath(); d.fill();
+    } else if (t === TILE.FOREST) {
+      d.fillStyle = '#1c5a26';
+      d.beginPath();
+      d.moveTo(cx, topY - TH * 1.0); d.lineTo(cx + HW * 0.4, topY - HH * 0.1);
+      d.lineTo(cx - HW * 0.4, topY - HH * 0.1); d.closePath(); d.fill();
+    } else if (t === TILE.URBAN) {
+      d.fillStyle = 'rgba(255,255,255,0.18)';
+      d.fillRect(cx - HW * 0.3, topY - HH * 0.2, HW * 0.6, HH * 0.4);
     }
   }
 
-  // Static municipio borders + abbreviated labels.
-  (function buildMuni() {
-    const o = muni.getContext('2d');
-    o.strokeStyle = 'rgba(15,23,32,0.5)';
-    o.lineWidth = 1;
-    o.beginPath();
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const a = MGRID[idx(x, y)];
-        if (a === OCEAN_ID) continue;
-        if (x + 1 < COLS) {
-          const b = MGRID[idx(x + 1, y)];
-          if (b !== OCEAN_ID && b !== a) { o.moveTo((x + 1) * SCALE + 0.5, y * SCALE); o.lineTo((x + 1) * SCALE + 0.5, (y + 1) * SCALE); }
-        }
-        if (y + 1 < ROWS) {
-          const b = MGRID[idx(x, y + 1)];
-          if (b !== OCEAN_ID && b !== a) { o.moveTo(x * SCALE, (y + 1) * SCALE + 0.5); o.lineTo((x + 1) * SCALE, (y + 1) * SCALE + 0.5); }
-        }
-      }
+  function bakeTerrain() {
+    tctx.clearRect(0, 0, W, H);
+    for (let s = 0; s <= COLS + ROWS - 2; s++) {
+      const xMin = Math.max(0, s - (ROWS - 1));
+      const xMax = Math.min(COLS - 1, s);
+      for (let x = xMin; x <= xMax; x++) bakeTile(tctx, x, s - x);
     }
-    o.stroke();
-    o.font = `bold ${Math.round(SCALE * 1.5)}px system-ui, sans-serif`;
-    o.textAlign = 'center';
-    o.textBaseline = 'middle';
-    o.lineWidth = 2.5;
-    o.strokeStyle = 'rgba(10,16,24,0.85)';
-    o.fillStyle = 'rgba(255,255,255,0.92)';
-    for (let i = 0; i < MUNI_ABBR.length; i++) {
-      const c = MUNI_CENTROIDS[i];
-      const px = c[0] * SCALE + SCALE / 2, py = c[1] * SCALE + SCALE / 2;
-      o.strokeText(MUNI_ABBR[i], px, py);
-      o.fillText(MUNI_ABBR[i], px, py);
-    }
-  })();
-
-  function buildTerritory() {
-    const d = terrImg.data;
-    const owner = world.owner;
-    for (let i = 0; i < owner.length; i++) {
-      const o = owner[i];
-      const p = i * 4;
-      if (o < 0 || isOcean(world.tiles[i])) { d[p + 3] = 0; }
-      else { const [r, g, b] = civRgb[o]; d[p] = r; d[p + 1] = g; d[p + 2] = b; d[p + 3] = 115; }
-    }
-    terrCtx.putImageData(terrImg, 0, 0);
   }
 
   // ---- Sprites ----------------------------------------------------------
-  function drawUnits(detailed) {
-    for (const u of world.units) {
-      const c = world.civs[u.civ];
-      const px = u.x * SCALE, py = u.y * SCALE;
-      const onSea = isOcean(world.tiles[idx(u.x, u.y)]);
-      if (!detailed) {
-        ctx.fillStyle = c.color;
-        ctx.fillRect(px + SCALE * 0.2, py + SCALE * 0.2, SCALE * 0.6, SCALE * 0.6);
-        if (onSea) { ctx.fillStyle = '#6b4423'; ctx.fillRect(px + SCALE * 0.1, py + SCALE * 0.7, SCALE * 0.8, SCALE * 0.25); }
-        continue;
-      }
-      const bob = ((world.tick + u.id) >> 2) & 1;
-      const cx = px + SCALE / 2, top = py + 0.3 + bob;
-      ctx.fillStyle = 'rgba(0,0,0,0.4)'; // contorno
-      ctx.fillRect(cx - 2, top, 4, SCALE);
-      ctx.fillStyle = '#f1c27d'; // cabeza (piel)
-      ctx.fillRect(cx - 1.5, top, 3, 2.2);
-      ctx.fillStyle = c.color; // cuerpo (color del partido)
-      ctx.fillRect(cx - 1.5, top + 2.2, 3, SCALE - 3.6);
-      if (onSea) {
-        // bote bajo el personaje en el mar
-        ctx.fillStyle = '#6b4423';
-        ctx.beginPath();
-        ctx.moveTo(px + 0.5, py + SCALE - 2.5);
-        ctx.lineTo(px + SCALE - 0.5, py + SCALE - 2.5);
-        ctx.lineTo(px + SCALE - 2, py + SCALE - 0.3);
-        ctx.lineTo(px + 2, py + SCALE - 0.3);
-        ctx.closePath(); ctx.fill();
-      } else {
-        ctx.fillStyle = c.colorDark || c.color; // piernas
-        ctx.fillRect(cx - 1.5, top + SCALE - 1.6, 1.3, 1.6);
-        ctx.fillRect(cx + 0.2, top + SCALE - 1.6, 1.3, 1.6);
-      }
+  function drawPerson(sx, sy, color, colorDark, opt) {
+    const o = opt || {};
+    const s = TW * (o.leader ? 0.52 : o.free ? 0.34 : 0.38);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath(); ctx.ellipse(sx, sy, s * 0.5, s * 0.24, 0, 0, 7); ctx.fill();
+    if (o.onSea) {
+      ctx.fillStyle = '#6b4423';
+      ctx.beginPath();
+      ctx.moveTo(sx - s * 0.7, sy - s * 0.1);
+      ctx.lineTo(sx + s * 0.7, sy - s * 0.1);
+      ctx.lineTo(sx + s * 0.45, sy + s * 0.28);
+      ctx.lineTo(sx - s * 0.45, sy + s * 0.28);
+      ctx.closePath(); ctx.fill();
     }
-  }
-
-  function drawFree(detailed) {
-    if (!world.free) return;
-    for (const f of world.free) {
-      const px = f.x * SCALE, py = f.y * SCALE, cx = px + SCALE / 2;
-      if (!detailed) {
-        ctx.fillStyle = '#b9c2cc';
-        ctx.fillRect(px + SCALE * 0.3, py + SCALE * 0.3, SCALE * 0.4, SCALE * 0.4);
-        continue;
-      }
-      const top = py + 0.5;
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(cx - 1.6, top, 3.2, SCALE - 0.5);
-      ctx.fillStyle = '#c2cbd4';
-      ctx.fillRect(cx - 1.2, top + 2, 2.4, SCALE - 2.5);
-      ctx.fillStyle = '#9aa6b2';
-      ctx.fillRect(cx - 1.2, top, 2.4, 2);
-    }
-  }
-
-  function drawAnimals(detailed) {
-    for (const a of world.animals) {
-      const px = a.x * SCALE, py = a.y * SCALE, cx = px + SCALE / 2, cy = py + SCALE / 2;
-      if (a.type === 3) { // bird
-        ctx.fillStyle = '#1c1c1c';
-        ctx.fillRect(cx - 1, cy - 0.5, 2, 1);
-        continue;
-      }
-      if (a.type === 2) { // fish
-        ctx.fillStyle = '#bfe9ff';
-        ctx.fillRect(cx - 1, cy, 2, 1);
-        continue;
-      }
-      if (!detailed) {
-        ctx.fillStyle = a.type === 1 ? '#5a5a5a' : '#f1f1ee';
-        ctx.fillRect(cx - 1, cy - 1, 2.2, 2.2);
-        continue;
-      }
-      if (a.type === 1) { // wolf
-        ctx.fillStyle = '#555a5e';
-        ctx.fillRect(cx - 2, cy - 1, 4, 2.5);
-        ctx.fillRect(cx + 1.5, cy - 1.5, 1.5, 1.5);
-      } else { // sheep
-        ctx.fillStyle = '#f2f2ee';
-        ctx.fillRect(cx - 2, cy - 1.5, 4, 3);
-        ctx.fillStyle = '#3a3a3a';
-        ctx.fillRect(cx + 1.5, cy - 1, 1.5, 1.5);
-      }
-    }
-  }
-
-  function drawLeaders() {
-    for (const u of world.units) {
-      if (!u.isLeader) continue;
-      const px = u.x * SCALE, py = u.y * SCALE, cx = px + SCALE / 2;
-      // gold halo so rulers are findable even when zoomed out
-      ctx.fillStyle = 'rgba(255,211,77,0.35)';
-      ctx.beginPath(); ctx.arc(cx, py + SCALE / 2, SCALE * 0.9, 0, 7); ctx.fill();
-      // crown above the head
-      const w = SCALE * 0.9, h = SCALE * 0.6, x0 = cx - w / 2, yb = py - 1, yt = yb - h;
+    const bob = ((world.tick + (o.id || 0)) >> 2) & 1;
+    const footY = sy - (o.onSea ? s * 0.05 : 0) - bob;
+    // body
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(sx - s * 0.3, footY - s * 0.95, s * 0.6, s * 0.85, s * 0.18);
+    ctx.fill();
+    // head
+    ctx.fillStyle = '#f0c9a0';
+    ctx.beginPath(); ctx.arc(sx, footY - s * 1.08, s * 0.28, 0, 7); ctx.fill();
+    if (o.leader) {
+      // gold halo + crown
+      ctx.fillStyle = 'rgba(255,211,77,0.32)';
+      ctx.beginPath(); ctx.ellipse(sx, footY - s * 0.4, s * 0.95, s * 0.5, 0, 0, 7); ctx.fill();
       ctx.fillStyle = '#ffd34d';
+      const w = s * 0.56, cyq = footY - s * 1.42;
       ctx.beginPath();
-      ctx.moveTo(x0, yb);
-      ctx.lineTo(x0, yt);
-      ctx.lineTo(x0 + w * 0.25, yt + h * 0.5);
-      ctx.lineTo(cx, yt);
-      ctx.lineTo(x0 + w * 0.75, yt + h * 0.5);
-      ctx.lineTo(x0 + w, yt);
-      ctx.lineTo(x0 + w, yb);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#7a5a00'; ctx.lineWidth = 0.4; ctx.stroke();
+      ctx.moveTo(sx - w / 2, cyq);
+      ctx.lineTo(sx - w / 2, cyq - s * 0.26);
+      ctx.lineTo(sx - w / 4, cyq - s * 0.06);
+      ctx.lineTo(sx, cyq - s * 0.32);
+      ctx.lineTo(sx + w / 4, cyq - s * 0.06);
+      ctx.lineTo(sx + w / 2, cyq - s * 0.26);
+      ctx.lineTo(sx + w / 2, cyq);
+      ctx.closePath(); ctx.fill();
+    } else if (o.deputy) {
+      // small star badge over the head
+      ctx.fillStyle = '#ffd34d';
+      ctx.fillRect(sx - s * 0.12, footY - s * 1.5, s * 0.24, s * 0.24);
     }
   }
 
-  function drawCities() {
-    for (const c of world.cities) {
-      const civ = world.civs[c.civ];
-      const big = c.pop > 20;
-      const s = SCALE * (big ? 1.9 : 1.3);
-      const px = c.x * SCALE + SCALE / 2, py = c.y * SCALE + SCALE / 2;
-      const x0 = px - s / 2, y0 = py - s / 2;
-      // resalte del color del partido que la posee (y destello al conquistar)
-      const flash = c.flash > 0 ? c.flash / 45 : 0;
-      ctx.fillStyle = civ.color;
-      ctx.globalAlpha = 0.18 + flash * 0.5;
-      ctx.beginPath(); ctx.arc(px, py, s * (0.95 + flash * 0.7), 0, 7); ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = civ.colorDark;
-      ctx.fillRect(x0, y0 + s * 0.42, s, s * 0.58);
-      ctx.fillStyle = civ.color; // roof
+  function drawDot(sx, sy, color, r) {
+    ctx.fillStyle = color;
+    ctx.fillRect(sx - r, sy - r * 1.2, r * 2, r * 2);
+  }
+
+  function drawCity(c, sx, sy) {
+    const civ = world.civs[c.civ];
+    const big = c.pop > 20;
+    const s = TW * (big ? 1.7 : 1.15);
+    const flash = c.flash > 0 ? c.flash / 45 : 0;
+    // ownership ring / capture flash
+    ctx.fillStyle = civ.color;
+    ctx.globalAlpha = 0.16 + flash * 0.5;
+    ctx.beginPath(); ctx.ellipse(sx, sy, s * (0.8 + flash * 0.6), s * 0.45 + flash * s * 0.3, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+    // iso building: left + right wall + roof
+    const h = s * 0.95;          // building height
+    const bw = s * 0.5;          // half footprint
+    const topY = sy - h;
+    // left wall
+    ctx.fillStyle = civ.colorDark || civ.color;
+    ctx.beginPath();
+    ctx.moveTo(sx - bw, sy - bw * 0.5);
+    ctx.lineTo(sx, sy);
+    ctx.lineTo(sx, topY);
+    ctx.lineTo(sx - bw, topY - bw * 0.5);
+    ctx.closePath(); ctx.fill();
+    // right wall
+    ctx.fillStyle = shade(civ.color, 0.85);
+    ctx.beginPath();
+    ctx.moveTo(sx + bw, sy - bw * 0.5);
+    ctx.lineTo(sx, sy);
+    ctx.lineTo(sx, topY);
+    ctx.lineTo(sx + bw, topY - bw * 0.5);
+    ctx.closePath(); ctx.fill();
+    // roof diamond
+    ctx.fillStyle = civ.color;
+    ctx.beginPath();
+    ctx.moveTo(sx, topY - bw * 0.5 - bw * 0.5);
+    ctx.lineTo(sx + bw, topY - bw * 0.5);
+    ctx.lineTo(sx, topY);
+    ctx.lineTo(sx - bw, topY - bw * 0.5);
+    ctx.closePath(); ctx.fill();
+    // door on the right wall
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(sx + bw * 0.25, sy - bw * 0.55, bw * 0.3, bw * 0.55);
+    if (big) { // capital flag
+      ctx.fillStyle = '#fff'; ctx.fillRect(sx - 0.5, topY - bw * 0.5 - s * 0.5, 1, s * 0.5);
+      ctx.fillStyle = civ.color; ctx.fillRect(sx, topY - bw * 0.5 - s * 0.5, s * 0.32, s * 0.18);
+    }
+  }
+
+  function drawAnimal(a, sx, sy, detailed) {
+    if (a.type === 3) { ctx.fillStyle = '#1c1c1c'; ctx.fillRect(sx - 1, sy - TW * 0.6, 2, 1); return; } // bird
+    if (a.type === 2) { ctx.fillStyle = '#bfe9ff'; ctx.fillRect(sx - 1, sy, 2, 1); return; } // fish
+    if (!detailed) { drawDot(sx, sy, a.type === 1 ? '#5a5a5a' : '#f1f1ee', TW * 0.12); return; }
+    const s = TW * 0.4;
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(sx, sy, s * 0.5, s * 0.22, 0, 0, 7); ctx.fill();
+    if (a.type === 1) { // wolf
+      ctx.fillStyle = '#555a5e';
+      ctx.fillRect(sx - s * 0.5, sy - s * 0.5, s, s * 0.5);
+    } else { // sheep
+      ctx.fillStyle = '#f2f2ee';
+      ctx.beginPath(); ctx.ellipse(sx, sy - s * 0.3, s * 0.5, s * 0.36, 0, 0, 7); ctx.fill();
+    }
+  }
+
+  function drawEffect(e) {
+    const a = anchorF(e.x, e.y, SLAB);
+    const sx = a.sx, sy = a.sy;
+    if (e.kind === 'dragon') {
+      const f = anchorF(e.tx, e.ty, SLAB);
+      ctx.fillStyle = 'rgba(255,140,0,0.85)';
+      ctx.beginPath(); ctx.arc(f.sx, f.sy, TW * 1.4, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,220,80,0.8)';
+      ctx.beginPath(); ctx.arc(f.sx, f.sy, TW * 0.7, 0, 7); ctx.fill();
+      const dy = sy - TW * 2.2;
+      ctx.fillStyle = '#a83246';
+      ctx.beginPath(); ctx.moveTo(sx - 3, dy); ctx.lineTo(sx - 13, dy - 7); ctx.lineTo(sx - 3, dy - 3); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(sx + 3, dy); ctx.lineTo(sx + 13, dy - 7); ctx.lineTo(sx + 3, dy - 3); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#7a1f2b'; ctx.fillRect(sx - 4, dy - 3, 9, 6);
+    } else if (e.kind === 'ufo') {
+      const dy = sy - TW * 2.6;
+      ctx.fillStyle = 'rgba(140,255,160,0.22)';
+      ctx.beginPath(); ctx.moveTo(sx - 2, dy); ctx.lineTo(sx + 2, dy); ctx.lineTo(sx + 8, sy); ctx.lineTo(sx - 8, sy); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#9aa6b2'; ctx.beginPath(); ctx.ellipse(sx, dy, TW * 1.5, TW * 0.6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#cfe8ff'; ctx.beginPath(); ctx.ellipse(sx, dy - TW * 0.35, TW * 0.65, TW * 0.45, 0, 0, 7); ctx.fill();
+    } else if (e.kind === 'tornado') {
+      ctx.fillStyle = 'rgba(90,90,90,0.7)';
+      const wob = Math.sin(e.t * 0.5) * 2;
       ctx.beginPath();
-      ctx.moveTo(x0 - 1, y0 + s * 0.46);
-      ctx.lineTo(px, y0);
-      ctx.lineTo(x0 + s + 1, y0 + s * 0.46);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,0.45)'; // door
-      ctx.fillRect(px - s * 0.12, y0 + s * 0.62, s * 0.24, s * 0.38);
-      if (big) { // capital flag
-        ctx.fillStyle = '#fff'; ctx.fillRect(px - 0.5, y0 - s * 0.4, 1, s * 0.4);
-        ctx.fillStyle = civ.color; ctx.fillRect(px, y0 - s * 0.4, s * 0.35, s * 0.18);
-      }
+      ctx.moveTo(sx - TW * 1.4 + wob, sy - TW * 2.4);
+      ctx.lineTo(sx + TW * 1.4 + wob, sy - TW * 2.4);
+      ctx.lineTo(sx + 1, sy); ctx.lineTo(sx - 1, sy);
+      ctx.closePath(); ctx.fill();
+    } else if (e.kind === 'volcano') {
+      const r = Math.min(6, 1 + e.t * 0.05) * TW * 0.7;
+      ctx.fillStyle = 'rgba(255,90,0,0.5)'; ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.55, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,200,40,0.85)'; ctx.beginPath(); ctx.ellipse(sx, sy, r * 0.45, r * 0.25, 0, 0, 7); ctx.fill();
     }
   }
 
-  function drawEffects() {
-    for (const e of world.effects) {
-      const px = e.x * SCALE, py = e.y * SCALE;
-      if (e.kind === 'dragon') {
-        ctx.fillStyle = '#a83246';
-        ctx.beginPath(); ctx.moveTo(px - 3, py); ctx.lineTo(px - 13, py - 7); ctx.lineTo(px - 3, py - 3); ctx.closePath(); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(px + 3, py); ctx.lineTo(px + 13, py - 7); ctx.lineTo(px + 3, py - 3); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#7a1f2b'; ctx.fillRect(px - 4, py - 3, 9, 6);
-        // fire breath toward target
-        ctx.fillStyle = 'rgba(255,140,0,0.85)';
-        const fx = e.tx * SCALE, fy = e.ty * SCALE;
-        ctx.beginPath(); ctx.arc(fx, fy, SCALE * 1.6, 0, 7); ctx.fill();
-        ctx.fillStyle = 'rgba(255,220,80,0.8)';
-        ctx.beginPath(); ctx.arc(fx, fy, SCALE * 0.8, 0, 7); ctx.fill();
-      } else if (e.kind === 'ufo') {
-        ctx.fillStyle = 'rgba(140,255,160,0.25)'; // beam
-        ctx.beginPath(); ctx.moveTo(px - 2, py); ctx.lineTo(px + 2, py); ctx.lineTo(px + 7, py + SCALE * 3); ctx.lineTo(px - 7, py + SCALE * 3); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#9aa6b2'; ctx.beginPath(); ctx.ellipse(px, py, SCALE * 1.6, SCALE * 0.7, 0, 0, 7); ctx.fill();
-        ctx.fillStyle = '#cfe8ff'; ctx.beginPath(); ctx.ellipse(px, py - SCALE * 0.4, SCALE * 0.7, SCALE * 0.5, 0, 0, 7); ctx.fill();
-      } else if (e.kind === 'tornado') {
-        ctx.fillStyle = 'rgba(90,90,90,0.7)';
-        const wob = Math.sin(e.t * 0.5) * 2;
-        ctx.beginPath();
-        ctx.moveTo(px - SCALE * 1.6 + wob, py - SCALE * 2.2);
-        ctx.lineTo(px + SCALE * 1.6 + wob, py - SCALE * 2.2);
-        ctx.lineTo(px + 1, py + SCALE);
-        ctx.lineTo(px - 1, py + SCALE);
-        ctx.closePath(); ctx.fill();
-      } else if (e.kind === 'volcano') {
-        const r = Math.min(6, 1 + e.t * 0.05) * SCALE;
-        ctx.fillStyle = 'rgba(255,90,0,0.5)'; ctx.beginPath(); ctx.arc(px, py, r, 0, 7); ctx.fill();
-        ctx.fillStyle = 'rgba(255,200,40,0.8)'; ctx.beginPath(); ctx.arc(px, py, r * 0.45, 0, 7); ctx.fill();
-      }
-    }
-  }
-
+  // ---- Frame ------------------------------------------------------------
   function draw() {
-    if (terrainDirty) { buildTerrain(); buildDetail(); terrainDirty = false; }
+    if (terrainDirty) { bakeTerrain(); terrainDirty = false; }
     easeCamera();
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#1c5e8c'; // mar alrededor (se ve más agua al alejar)
+    // ocean background (subtle vertical gradient)
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1f6da0'); g.addColorStop(1, '#0c3350');
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+    ctx.drawImage(terrain, 0, 0);
 
-    ctx.drawImage(terrain, 0, 0, W, H);
-    // (sin "aura" de territorio: las ciudades cambian de color al ser conquistadas)
-    ctx.drawImage(detail, 0, 0);
-    ctx.drawImage(muni, 0, 0);
+    const detailed = zoom >= 0.9;
+    // Collect ground entities and depth-sort (back → front).
+    const ents = [];
+    if (world.free) for (const f of world.free) ents.push({ d: f.x + f.y, k: 0, o: f });
+    for (const a of world.animals) ents.push({ d: a.x + a.y - 0.05, k: 1, o: a });
+    for (const u of world.units) ents.push({ d: u.x + u.y + (u.isLeader ? 0.35 : 0.1), k: 2, o: u });
+    for (const c of world.cities) ents.push({ d: c.x + c.y + 0.25, k: 3, o: c });
+    ents.sort((p, q) => p.d - q.d);
 
-    const detailed = zoom >= 1.1;
-    drawFree(detailed);
-    drawUnits(detailed);
-    drawAnimals(detailed);
-    drawLeaders();
-    drawCities();
-    drawEffects();
+    for (const e of ents) {
+      const o = e.o;
+      const ax = anchor(o.x, o.y);
+      if (e.k === 0) { // free-thinker
+        if (detailed) drawPerson(ax.sx, ax.sy, '#c2cbd4', '#9aa6b2', { free: true, id: o.id });
+        else drawDot(ax.sx, ax.sy, '#b9c2cc', TW * 0.12);
+      } else if (e.k === 1) { // animal
+        drawAnimal(o, ax.sx, ax.sy, detailed);
+      } else if (e.k === 2) { // unit / leader
+        const civ = world.civs[o.civ];
+        const onSea = isOcean(world.tiles[idx(o.x, o.y)]);
+        if (detailed || o.isLeader) {
+          drawPerson(ax.sx, ax.sy, civ.color, civ.colorDark, { leader: o.isLeader, deputy: o.isDeputy, onSea, id: o.id });
+        } else {
+          drawDot(ax.sx, ax.sy, civ.color, TW * 0.14);
+        }
+      } else { // city
+        drawCity(o, ax.sx, ax.sy);
+      }
+    }
+    for (const e of world.effects) drawEffect(e);
   }
 
   function markTerrainDirty() { terrainDirty = true; }
