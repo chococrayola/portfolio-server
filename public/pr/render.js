@@ -8,8 +8,8 @@
  * camera transform so pinch-zoom stays crisp.
  */
 
-import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=19';
-import { MGRID, OCEAN_ID } from './municipios.js?v=19';
+import { COLS, ROWS, TILE, TILE_COLOR, idx, isOcean, MUNI_ABBR, MUNI_CENTROIDS } from './map.js?v=20';
+import { MGRID, OCEAN_ID } from './municipios.js?v=20';
 
 const SCALE = 8; // world pixels per tile (mapa más grande)
 

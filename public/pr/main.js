@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=19';
-import { defaultCivs } from './civs.js?v=19';
-import { createWorld } from './sim.js?v=19';
-import { createRenderer } from './render.js?v=19';
-import { POWERS, POWER_BY_ID } from './powers.js?v=19';
-import { avatarDataURL } from './avatar.js?v=19';
+import { generateMap } from './map.js?v=20';
+import { defaultCivs } from './civs.js?v=20';
+import { createWorld } from './sim.js?v=20';
+import { createRenderer } from './render.js?v=20';
+import { POWERS, POWER_BY_ID } from './powers.js?v=20';
+import { avatarDataURL } from './avatar.js?v=20';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -187,15 +187,21 @@ function renderDeputies() {
     const d = world.deputy[i];
     const card = document.createElement('div');
     card.className = 'deputy';
+    // Deputy history: entries that have ended (have a 'to' date), newest first
+    const dlog = world.deputyLog ? world.deputyLog[i] : [];
+    const past = dlog.filter((e) => e.to !== null).slice(-3).reverse();
+    const histHTML = past.length > 0
+      ? `<ul class="dep-hist">${past.map((e) => `<li class="dep-hist-item"><span>${e.name}</span> <span class="dim">${formatStamp(e.from)}</span></li>`).join('')}</ul>`
+      : '';
     if (d) {
       const av = avatarDataURL(d.name + d.id, c.color, { size: 34 });
-      card.innerHTML = `<img class="dep-av" alt="" src="${av}" />
+      card.innerHTML = `<div class="dep-main"><img class="dep-av" alt="" src="${av}" />
         <div class="dep-info"><div class="dep-name"></div>
-        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')} · ⚔ ${d.kills}</div></div>`;
+        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')} · ⚔ ${d.kills}</div></div></div>${histHTML}`;
       card.querySelector('.dep-name').textContent = d.name;
     } else {
-      card.innerHTML = `<div class="dep-info"><div class="dep-name dim">— sin nombrar —</div>
-        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')}</div></div>`;
+      card.innerHTML = `<div class="dep-main"><div class="dep-info"><div class="dep-name dim">— sin nombrar —</div>
+        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')}</div></div></div>${histHTML}`;
     }
     el.appendChild(card);
   });
@@ -232,10 +238,8 @@ function renderStats() {
   const yrs = (t) => Math.floor(t / 5);
   const money = (b) => '$' + Math.round(b).toLocaleString('en-US');
 
-  // ordenar por territorio (líder primero) para vista tipo ranking
-  const order = world.civs.map((_, i) => i).sort((a, b) => world.stats[b].territory - world.stats[a].territory);
-  order.forEach((i) => {
-    const c = world.civs[i];
+  // orden fijo por índice de partido — las tarjetas nunca se mueven
+  world.civs.forEach((c, i) => {
     const s = world.stats[i];
     const pct = Math.round((s.territory / land) * 100);
     const budget = world.budget ? world.budget[i] : 0;
@@ -248,6 +252,10 @@ function renderStats() {
       if (j !== i && world.war[i][j]) wars.push(`⚔ ${world.civs[j].name.replace('Los ', '')}`);
     }
     const av = avatarDataURL(c.leader, c.color, { crown: true, size: 44 });
+    const slog = world.successionLog ? world.successionLog[i] : [];
+    const succNote = slog.length > 0
+      ? `<div class="succ-note">⚰️ Nueva toma: ${formatStamp(slog[slog.length - 1].tick)}</div>`
+      : '';
     const card = document.createElement('div');
     card.className = 'civ-card';
     card.style.borderLeftColor = c.color;
@@ -259,6 +267,7 @@ function renderStats() {
           <div class="ruler">👑 <span></span></div>
         </div>
       </div>
+      ${succNote}
       <div class="card-status">${world.leaderStatus(i)}</div>
       <div class="row"><span>Población</span><span>${s.pop}</span></div>
       <div class="row"><span>Ciudades</span><span>${s.cities}</span></div>
@@ -630,16 +639,19 @@ function renderInspector() {
       ? `<div class="irow"><span>Reinado</span><span>${years(world.tick - u.since)} años</span></div>` +
         `<div class="irow"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[u.civ] : 0}</span></div>`
       : '';
-    // historial de bajas del líder
+    // historial de bajas del partido (acumulado, no se pierde al cambiar líder)
     let killHist = '';
-    if (u.isLeader && u.killLog && u.killLog.length) {
-      const items = u.killLog.slice().reverse().map((k) => {
-        const ec = world.civs[k.civ];
-        return `<li>⚔ <b style="color:${ec.color}">${k.name}</b> <span class="dim">(${ec.name.replace('Los ', '')})</span></li>`;
-      }).join('');
-      killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas</div><ul>${items}</ul></div>`;
-    } else if (u.isLeader) {
-      killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas</div><div class="dim">Aún sin bajas.</div></div>`;
+    if (u.isLeader) {
+      const klog = (world.killLog && world.killLog[u.civ]) || [];
+      if (klog.length) {
+        const items = klog.slice().reverse().map((k) => {
+          const ec = world.civs[k.civ];
+          return `<li>⚔ <b style="color:${ec ? ec.color : '#888'}">${k.name}</b> <span class="dim">(${ec ? ec.name.replace('Los ', '') : '?'})</span></li>`;
+        }).join('');
+        killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas (${klog.length})</div><ul>${items}</ul></div>`;
+      } else {
+        killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas</div><div class="dim">Aún sin bajas.</div></div>`;
+      }
     }
     body.innerHTML = `
       <div class="ihead">

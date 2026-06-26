@@ -14,8 +14,8 @@ import {
   COLS, ROWS, TILE, MOVE_COST, GROWTH_MOD, DEFENSE_MOD,
   idx, inBounds, isOcean, isLand, isBuildable, isRough,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=19';
-import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=19';
+} from './map.js?v=20';
+import { CITY_NAMES, FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=20';
 
 // --- Tunables (scaled for the larger real-coastline map ~17.5k land tiles) --
 const MAX_UNITS = 2200;
@@ -71,6 +71,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     budget: civs.map(() => 5000), // presupuesto inicial $5,000
     budgetFactor: civs.map(() => 1), // multiplicador de campaña según dinero
     kills: civs.map(() => 0), // bajas acumuladas causadas por cada partido
+    killLog: civs.map(() => []),      // historial de bajas del líder por partido (max 16)
+    deputyLog: civs.map(() => []),    // historial de segundos al mando por partido (max 8)
+    successionLog: civs.map(() => []),// sucesiones del liderazgo por partido (max 6)
     prAnchor: civs.map(() => null), // destino en la isla grande (al migrar)
     history: [], // muestras {pop,terr,budget,free} para gráficas
     winner: null,
@@ -553,8 +556,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         if (other.hp <= 0) {
           unit.kills++; t.kills[unit.civ]++;
           if (unit.isLeader) {
-            unit.killLog.push({ name: other.name, civ: other.civ, tick: t.tick });
-            if (unit.killLog.length > 8) unit.killLog.shift();
+            t.killLog[unit.civ].push({ name: other.name, civ: other.civ, tick: t.tick });
+            if (t.killLog[unit.civ].length > 16) t.killLog[unit.civ].shift();
           }
           killUnit(occupant);
         }
@@ -1101,8 +1104,10 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         const had = !!lead;
         const next = promoteLeader(i, false);
         const c = t.civs[i];
-        if (next && had && rng() < 0.5) {
-          log(`⚰️ Cae ${c.leader} de ${c.name}; otro toma el mando.`, i);
+        if (next && had) {
+          t.successionLog[i].push({ tick: t.tick });
+          if (t.successionLog[i].length > 6) t.successionLog[i].shift();
+          if (rng() < 0.5) log(`⚰️ Cae ${c.leader} de ${c.name}; otro toma el mando.`, i);
         } else if (!next) {
           t.leaders[i] = null;
         }
@@ -1124,8 +1129,14 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         if (!best || u.kills > best.kills || (u.kills === best.kills && u.age > best.age)) best = u;
       }
       if (best) {
+        const dlog = t.deputyLog[i];
+        if (dlog.length > 0 && dlog[dlog.length - 1].to === null) {
+          dlog[dlog.length - 1].to = t.tick;
+        }
         best.isDeputy = true;
         t.deputy[i] = best;
+        dlog.push({ name: best.name, from: t.tick, to: null });
+        if (dlog.length > 8) dlog.shift();
         log(`🎖️ ${best.name} es nombrado segundo al mando de ${t.civs[i].name}.`, i);
       } else {
         t.deputy[i] = null;
