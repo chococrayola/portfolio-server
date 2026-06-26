@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1720" />
+  <title>Preview isométrico — Isla de Poder</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b1220; color: #e7eef5; font-family: system-ui, -apple-system, sans-serif; }
+    header { padding: 12px 16px; border-bottom: 1px solid #2b3a4a; background: linear-gradient(180deg,#15242f,#0f1720); }
+    header h1 { margin: 0 0 4px; font-size: 1.05rem; }
+    header p { margin: 0; font-size: 0.82rem; color: #9fb0c0; }
+    .bar { display: flex; gap: 8px; padding: 10px 16px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid #2b3a4a; }
+    .btn { background: #1f2c3a; border: 1px solid #2b3a4a; color: #e7eef5; border-radius: 9px; padding: 8px 12px; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+    .btn.p { background: #f4b942; color: #2a1d00; border: none; }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.78rem; margin-left: auto; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+    .wrap { width: 100%; overflow: auto; background:
+        radial-gradient(circle at 50% 30%, #1c5e8c 0%, #134467 55%, #0c2f49 100%); }
+    canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+    .note { padding: 10px 16px 24px; font-size: 0.82rem; color: #9fb0c0; }
+    .note b { color: #f4b942; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏝️ Preview isométrico</h1>
+    <p>Puerto Rico real, proyectado en isométrico. Si te gusta, sigo con el juego completo en este estilo.</p>
+  </header>
+  <div class="bar">
+    <button id="zoomIn" class="btn">＋ Acercar</button>
+    <button id="zoomOut" class="btn">－ Alejar</button>
+    <button id="regen" class="btn p">↺ Otro mapa</button>
+    <div class="legend">
+      <span><i class="dot" style="background:#1f6fde"></i>PNP</span>
+      <span><i class="dot" style="background:#d6322e"></i>PPD</span>
+      <span><i class="dot" style="background:#7d3cc9"></i>MVC</span>
+      <span><i class="dot" style="background:#23a455"></i>PIP</span>
+      <span><i class="dot" style="background:#e98a2b"></i>Molina</span>
+    </div>
+  </div>
+  <div class="wrap" id="wrap">
+    <canvas id="iso"></canvas>
+  </div>
+  <p class="note">
+    Esto es solo una <b>vista previa estática</b> del estilo (no es el juego todavía). Muestra la
+    isla como bloques isométricos: costas con acantilados, montañas y colinas elevadas, ciudades 👑
+    y ciudadanos de cada partido. Pellizca para acercarte y mirar el detalle. Dime si <b>seguimos en
+    isométrico</b> o probamos el estilo estilizado.
+  </p>
+
+  <script type="module">
+    import { generateMap, TILE, COLS, ROWS, idx, isLand, isOcean } from './pr/map.js?v=20';
+    import { defaultCivs } from './pr/civs.js?v=20';
+
+    const canvas = document.getElementById('iso');
+    const ctx = canvas.getContext('2d');
+    const civs = defaultCivs();
+    const PARTY = civs.map((c) => c.color);
+
+    // --- Isometric projection -------------------------------------------------
+    let TW = 16;            // tile width (screen px)
+    let TH = TW / 2;        // tile height (2:1 iso)
+    let EH = TW / 4;        // pixels per elevation unit
+    const SLAB = 2.4;       // land base thickness (cliff height in units)
+
+    // elevation (in units above sea) for each tile type
+    function elevOf(t) {
+      switch (t) {
+        case TILE.OCEAN: return 0;
+        case TILE.BEACH: return SLAB + 0.0;
+        case TILE.GRASS: return SLAB + 0.25;
+        case TILE.HILL: return SLAB + 1.1;
+        case TILE.MOUNTAIN: return SLAB + 2.3;
+        case TILE.FOREST: return SLAB + 0.6;
+        case TILE.URBAN: return SLAB + 0.35;
+        default: return SLAB;
+      }
+    }
+    const TOP = {
+      [TILE.BEACH]: '#efdca0', [TILE.GRASS]: '#7cc24f', [TILE.HILL]: '#5b9a3d',
+      [TILE.MOUNTAIN]: '#9a8b73', [TILE.FOREST]: '#2f7a3a', [TILE.URBAN]: '#b9bfc5',
+    };
+    function shade(hex, f) {
+      const n = parseInt(hex.slice(1), 16);
+      let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      r = Math.max(0, Math.min(255, r * f)) | 0;
+      g = Math.max(0, Math.min(255, g * f)) | 0;
+      b = Math.max(0, Math.min(255, b * f)) | 0;
+      return `rgb(${r},${g},${b})`;
+    }
+
+    let map, sprites = [], originX = 0, originY = 0, bounds;
+
+    function build(seed) {
+      map = generateMap(seed);
+      // sprite placements: leaders at start anchors, citizens scattered
+      sprites = [];
+      map.starts.forEach((s, i) => sprites.push({ x: s.x, y: s.y, civ: i, leader: true }));
+      let placed = 0, tries = 0;
+      while (placed < 60 && tries < 4000) {
+        tries++;
+        const x = (Math.random() * COLS) | 0, y = (Math.random() * ROWS) | 0;
+        if (isLand(map.tiles[idx(x, y)])) { sprites.push({ x, y, civ: (Math.random() * PARTY.length) | 0, leader: false }); placed++; }
+      }
+      computeBounds();
+      render();
+    }
+
+    function isoX(x, y) { return (x - y) * (TW / 2); }
+    function isoY(x, y, e) { return (x + y) * (TH / 2) - e * EH; }
+
+    function computeBounds() {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+        const t = map.tiles[idx(x, y)];
+        if (!isLand(t)) continue;
+        const e = elevOf(t);
+        const sx = isoX(x, y), syTop = isoY(x, y, e), syBot = isoY(x, y, 0) + TH;
+        if (sx - TW / 2 < minX) minX = sx - TW / 2;
+        if (sx + TW / 2 > maxX) maxX = sx + TW / 2;
+        if (syTop - TH / 2 < minY) minY = syTop - TH / 2;
+        if (syBot > maxY) maxY = syBot;
+      }
+      const pad = 40;
+      bounds = { minX, maxX, minY, maxY };
+      const w = Math.ceil(maxX - minX + pad * 2);
+      const h = Math.ceil(maxY - minY + pad * 2);
+      canvas.width = w; canvas.height = h;
+      canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+      originX = -minX + pad;
+      originY = -minY + pad;
+    }
+
+    // draw one iso cube/slab at tile (x,y)
+    function drawTile(x, y) {
+      const t = map.tiles[idx(x, y)];
+      if (!isLand(t)) return;
+      const e = elevOf(t);
+      const cx = originX + isoX(x, y);
+      const topY = originY + isoY(x, y, e);
+      const hw = TW / 2, hh = TH / 2;
+      const top = TOP[t] || '#7cc24f';
+      // subtle per-tile jitter
+      const j = ((x * 53 + y * 131) % 7) / 100 - 0.03;
+      // base (sea level) y for the front faces
+      const baseY = originY + isoY(x, y, 0) + TH;
+      // left face (toward -x / +y front-left)
+      ctx.fillStyle = shade(top, 0.62 + j);
+      ctx.beginPath();
+      ctx.moveTo(cx - hw, topY);
+      ctx.lineTo(cx, topY + hh);
+      ctx.lineTo(cx, baseY);
+      ctx.lineTo(cx - hw, baseY - hh);
+      ctx.closePath(); ctx.fill();
+      // right face
+      ctx.fillStyle = shade(top, 0.78 + j);
+      ctx.beginPath();
+      ctx.moveTo(cx + hw, topY);
+      ctx.lineTo(cx, topY + hh);
+      ctx.lineTo(cx, baseY);
+      ctx.lineTo(cx + hw, baseY - hh);
+      ctx.closePath(); ctx.fill();
+      // top diamond
+      ctx.fillStyle = shade(top, 1.0 + j);
+      ctx.beginPath();
+      ctx.moveTo(cx, topY - hh);
+      ctx.lineTo(cx + hw, topY);
+      ctx.lineTo(cx, topY + hh);
+      ctx.lineTo(cx - hw, topY);
+      ctx.closePath(); ctx.fill();
+      // decorations
+      if (t === TILE.MOUNTAIN && ((x * 31 + y * 17) % 5) < 2) {
+        ctx.fillStyle = '#f4f6fb';
+        ctx.beginPath();
+        ctx.moveTo(cx, topY - hh * 0.5);
+        ctx.lineTo(cx + hw * 0.32, topY);
+        ctx.lineTo(cx - hw * 0.32, topY);
+        ctx.closePath(); ctx.fill();
+      } else if (t === TILE.FOREST) {
+        ctx.fillStyle = '#1c5a26';
+        ctx.beginPath();
+        ctx.moveTo(cx, topY - TH * 1.1);
+        ctx.lineTo(cx + hw * 0.42, topY - hh * 0.1);
+        ctx.lineTo(cx - hw * 0.42, topY - hh * 0.1);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    function drawSprite(s) {
+      const t = map.tiles[idx(s.x, s.y)];
+      const e = elevOf(t);
+      const cx = originX + isoX(s.x, s.y);
+      const topY = originY + isoY(s.x, s.y, e);
+      const col = PARTY[s.civ] || '#ccc';
+      const sz = s.leader ? TW * 0.5 : TW * 0.34;
+      // shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(cx, topY, sz * 0.55, sz * 0.28, 0, 0, 7); ctx.fill();
+      // body
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.roundRect(cx - sz * 0.32, topY - sz * 1.05, sz * 0.64, sz * 0.95, sz * 0.2);
+      ctx.fill();
+      // head
+      ctx.fillStyle = '#f0c9a0';
+      ctx.beginPath();
+      ctx.arc(cx, topY - sz * 1.2, sz * 0.3, 0, 7); ctx.fill();
+      // crown for leaders
+      if (s.leader) {
+        ctx.fillStyle = '#ffd34d';
+        const cyq = topY - sz * 1.55, w = sz * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - w / 2, cyq);
+        ctx.lineTo(cx - w / 2, cyq - sz * 0.28);
+        ctx.lineTo(cx - w / 4, cyq - sz * 0.08);
+        ctx.lineTo(cx, cyq - sz * 0.34);
+        ctx.lineTo(cx + w / 4, cyq - sz * 0.08);
+        ctx.lineTo(cx + w / 2, cyq - sz * 0.28);
+        ctx.lineTo(cx + w / 2, cyq);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // terrain back-to-front by diagonal
+      for (let s = 0; s <= COLS + ROWS - 2; s++) {
+        const xMin = Math.max(0, s - (ROWS - 1));
+        const xMax = Math.min(COLS - 1, s);
+        for (let x = xMin; x <= xMax; x++) drawTile(x, s - x);
+      }
+      // sprites on top, sorted by depth
+      sprites.slice().sort((a, b) => (a.x + a.y) - (b.x + b.y)).forEach(drawSprite);
+    }
+
+    document.getElementById('zoomIn').onclick = () => { TW = Math.min(40, TW + 6); TH = TW / 2; EH = TW / 4; computeBounds(); render(); };
+    document.getElementById('zoomOut').onclick = () => { TW = Math.max(8, TW - 6); TH = TW / 2; EH = TW / 4; computeBounds(); render(); };
+    document.getElementById('regen').onclick = () => build((Math.random() * 1e9) | 0);
+
+    build(7);
+  </script>
+</body>
+</html>
