@@ -250,10 +250,14 @@ body {
 @media (max-width: 1100px) { .deputies { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .deputies { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 460px) { .deputies { grid-template-columns: 1fr; } }
-.deputy { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
+.deputy { display: flex; flex-direction: column; gap: 5px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
+.dep-main { display: flex; align-items: center; gap: 8px; }
 .dep-av { width: 30px; height: 30px; border-radius: 7px; image-rendering: pixelated; border: 1px solid var(--line); }
 .dep-name { font-weight: 700; font-size: 0.82rem; }
 .dep-sub { font-size: 0.72rem; }
+.dep-hist { list-style: none; margin: 0; padding: 4px 0 0; border-top: 1px solid var(--line); }
+.dep-hist-item { font-size: 0.68rem; color: var(--muted); padding: 1px 0; display: flex; justify-content: space-between; }
+.succ-note { font-size: 0.7rem; color: #ff8d8d; background: rgba(180,50,50,0.13); border-radius: 6px; padding: 3px 7px; margin: 0 0 5px; }
 .card-status {
   font-size: 0.74rem;
   font-weight: 700;

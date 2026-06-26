@@ -6,7 +6,7 @@
  * María, los terremotos de 2020 y los eternos apagones de LUMA.
  */
 
-import { TILE } from './map.js?v=19';
+import { TILE } from './map.js?v=20';
 
 export const POWERS = [
   {
