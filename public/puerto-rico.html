@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1c5e8c" />
   <title>Isla de Poder — Simulación de Puerto Rico</title>
-  <link rel="stylesheet" href="puerto-rico.css?v=22" />
+  <link rel="stylesheet" href="puerto-rico.css?v=23" />
 </head>
 <body>
   <header class="topbar" id="statusBar">
     <div class="status-main">
       <span class="brand">🏝️ Isla de Poder</span>
-      <span class="ver">v22</span>
+      <span class="ver">v23</span>
       <span id="clock" class="clock">—</span>
       <span id="ticker" class="ticker">El mundo despierta…</span>
       <button id="settingsToggle" class="icon-btn" aria-label="Editor de rasgos">⚙️</button>
@@ -52,23 +52,23 @@
       </div>
     </main>
 
-    <!-- Tarjetas de líderes (columna derecha en pantallas anchas) -->
-    <section class="side-stats">
-      <h2 class="dash-title">Tablero de líderes</h2>
-      <div id="stats" class="stats"></div>
+    <!-- Gráficas en vivo (columna derecha en pantallas anchas) -->
+    <section class="side-charts">
+      <h2 class="dash-title">Gráficas en vivo · evolución en el tiempo</h2>
+      <div id="chartLegend" class="chart-legend"></div>
+      <div id="chartsGrid" class="charts-grid"></div>
     </section>
 
-    <!-- Paneles anchos: segundos, historia y gráficas (debajo del mapa) -->
+    <!-- Paneles anchos: tablero de líderes, segundos e historia (debajo del mapa) -->
     <section class="left-wide">
+      <h2 class="dash-title">Tablero de líderes</h2>
+      <div id="stats" class="stats"></div>
+
       <h2 class="dash-title">Segundos al mando</h2>
       <div id="deputies" class="deputies"></div>
 
       <h2 class="dash-title">Historia</h2>
       <ul id="eventLog" class="event-log big"></ul>
-
-      <h2 class="dash-title">Gráficas en vivo · evolución en el tiempo</h2>
-      <div id="chartLegend" class="chart-legend"></div>
-      <div id="chartsGrid" class="charts-grid"></div>
     </section>
   </div>
 
@@ -91,6 +91,6 @@
     </div>
   </div>
 
-  <script type="module" src="pr/main.js?v=22"></script>
+  <script type="module" src="pr/main.js?v=23"></script>
 </body>
 </html>
