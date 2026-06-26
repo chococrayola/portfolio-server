@@ -12,7 +12,11 @@
  *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, idx, isOcean, isLand } from './map.js?v=23';
+import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=24';
+
+const NEUTRAL = '#9aa6b2'; // color for unclaimed cities / free-thinkers
+const ABBR_BY_NAME = {};
+for (let i = 0; i < MUNI_NAMES.length; i++) ABBR_BY_NAME[MUNI_NAMES[i]] = MUNI_ABBR[i];
 
 // --- Isometric tile metrics ----------------------------------------------
 const TW = 14;          // tile width in world px
@@ -214,7 +218,8 @@ export function createRenderer(canvas, world) {
   // ---- Sprites ----------------------------------------------------------
   function drawPerson(sx, sy, color, colorDark, opt) {
     const o = opt || {};
-    const s = TW * (o.leader ? 0.52 : o.free ? 0.34 : 0.38);
+    let s = TW * (o.leader ? 0.52 : o.free ? 0.34 : 0.38);
+    if (o.old) { s *= 0.85; ctx.globalAlpha = 0.6; } // elders are smaller / fainter
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.beginPath(); ctx.ellipse(sx, sy, s * 0.5, s * 0.24, 0, 0, 7); ctx.fill();
@@ -257,6 +262,7 @@ export function createRenderer(canvas, world) {
       ctx.fillStyle = '#ffd34d';
       ctx.fillRect(sx - s * 0.12, footY - s * 1.5, s * 0.24, s * 0.24);
     }
+    ctx.globalAlpha = 1;
   }
 
   function drawDot(sx, sy, color, r) {
@@ -265,50 +271,54 @@ export function createRenderer(canvas, world) {
   }
 
   function drawCity(c, sx, sy) {
-    const civ = world.civs[c.civ];
-    const big = c.pop > 20;
-    const s = TW * (big ? 1.7 : 1.15);
+    const owned = c.owner >= 0;
+    const civ = owned ? world.civs[c.owner] : null;
+    const col = owned ? civ.color : NEUTRAL;
+    const colDark = owned ? (civ.colorDark || civ.color) : '#6c7782';
+    const big = c.pop > 24;
+    const s = TW * (big ? 1.7 : 1.2);
     const flash = c.flash > 0 ? c.flash / 45 : 0;
-    // ownership ring / capture flash
-    ctx.fillStyle = civ.color;
-    ctx.globalAlpha = 0.16 + flash * 0.5;
+    // ownership ring / claim flash
+    ctx.fillStyle = col;
+    ctx.globalAlpha = (owned ? 0.18 : 0.10) + flash * 0.5;
     ctx.beginPath(); ctx.ellipse(sx, sy, s * (0.8 + flash * 0.6), s * 0.45 + flash * s * 0.3, 0, 0, 7); ctx.fill();
     ctx.globalAlpha = 1;
-    // iso building: left + right wall + roof
-    const h = s * 0.95;          // building height
-    const bw = s * 0.5;          // half footprint
-    const topY = sy - h;
-    // left wall
-    ctx.fillStyle = civ.colorDark || civ.color;
+    // iso building: left + right wall + roof (the "pin")
+    const h = s * 0.95, bw = s * 0.5, topY = sy - h;
+    ctx.fillStyle = colDark;
     ctx.beginPath();
-    ctx.moveTo(sx - bw, sy - bw * 0.5);
-    ctx.lineTo(sx, sy);
-    ctx.lineTo(sx, topY);
-    ctx.lineTo(sx - bw, topY - bw * 0.5);
+    ctx.moveTo(sx - bw, sy - bw * 0.5); ctx.lineTo(sx, sy); ctx.lineTo(sx, topY); ctx.lineTo(sx - bw, topY - bw * 0.5);
     ctx.closePath(); ctx.fill();
-    // right wall
-    ctx.fillStyle = shade(civ.color, 0.85);
+    ctx.fillStyle = shade(col, 0.85);
     ctx.beginPath();
-    ctx.moveTo(sx + bw, sy - bw * 0.5);
-    ctx.lineTo(sx, sy);
-    ctx.lineTo(sx, topY);
-    ctx.lineTo(sx + bw, topY - bw * 0.5);
+    ctx.moveTo(sx + bw, sy - bw * 0.5); ctx.lineTo(sx, sy); ctx.lineTo(sx, topY); ctx.lineTo(sx + bw, topY - bw * 0.5);
     ctx.closePath(); ctx.fill();
-    // roof diamond
-    ctx.fillStyle = civ.color;
+    ctx.fillStyle = col;
     ctx.beginPath();
-    ctx.moveTo(sx, topY - bw * 0.5 - bw * 0.5);
-    ctx.lineTo(sx + bw, topY - bw * 0.5);
-    ctx.lineTo(sx, topY);
-    ctx.lineTo(sx - bw, topY - bw * 0.5);
+    ctx.moveTo(sx, topY - bw); ctx.lineTo(sx + bw, topY - bw * 0.5); ctx.lineTo(sx, topY); ctx.lineTo(sx - bw, topY - bw * 0.5);
     ctx.closePath(); ctx.fill();
-    // door on the right wall
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.fillRect(sx + bw * 0.25, sy - bw * 0.55, bw * 0.3, bw * 0.55);
-    if (big) { // capital flag
+    if (big) { // flag on bigger cities
       ctx.fillStyle = '#fff'; ctx.fillRect(sx - 0.5, topY - bw * 0.5 - s * 0.5, 1, s * 0.5);
-      ctx.fillStyle = civ.color; ctx.fillRect(sx, topY - bw * 0.5 - s * 0.5, s * 0.32, s * 0.18);
+      ctx.fillStyle = col; ctx.fillRect(sx, topY - bw * 0.5 - s * 0.5, s * 0.32, s * 0.18);
     }
+  }
+
+  // City name label (drawn after all buildings; fades in when zoomed in).
+  function drawCityLabel(c, sx, sy) {
+    const owned = c.owner >= 0;
+    const label = ABBR_BY_NAME[c.muni] || c.name;
+    const fs = Math.max(5, TW * 0.62);
+    ctx.font = `bold ${fs}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const ly = sy - TW * 1.7;
+    ctx.lineWidth = Math.max(1.5, fs * 0.32);
+    ctx.strokeStyle = 'rgba(8,14,22,0.92)';
+    ctx.strokeText(label, sx, ly);
+    ctx.fillStyle = owned ? world.civs[c.owner].color : '#e7eef5';
+    ctx.fillText(label, sx, ly);
   }
 
   function drawAnimal(a, sx, sy, detailed) {
@@ -381,32 +391,41 @@ export function createRenderer(canvas, world) {
     const detailed = zoom >= 0.9;
     // Collect ground entities and depth-sort (back → front).
     const ents = [];
-    if (world.free) for (const f of world.free) ents.push({ d: f.x + f.y, k: 0, o: f });
     for (const a of world.animals) ents.push({ d: a.x + a.y - 0.05, k: 1, o: a });
-    for (const u of world.units) ents.push({ d: u.x + u.y + (u.isLeader ? 0.35 : 0.1), k: 2, o: u });
+    for (const c of world.citizens) ents.push({ d: c.x + c.y + (c.isLeader ? 0.35 : 0.1), k: 2, o: c });
     for (const c of world.cities) ents.push({ d: c.x + c.y + 0.25, k: 3, o: c });
     ents.sort((p, q) => p.d - q.d);
 
     for (const e of ents) {
       const o = e.o;
       const ax = anchor(o.x, o.y);
-      if (e.k === 0) { // free-thinker
-        if (detailed) drawPerson(ax.sx, ax.sy, '#c2cbd4', '#9aa6b2', { free: true, id: o.id });
-        else drawDot(ax.sx, ax.sy, '#b9c2cc', TW * 0.12);
-      } else if (e.k === 1) { // animal
+      if (e.k === 1) { // animal
         drawAnimal(o, ax.sx, ax.sy, detailed);
-      } else if (e.k === 2) { // unit / leader
-        const civ = world.civs[o.civ];
-        const onSea = isOcean(world.tiles[idx(o.x, o.y)]);
+      } else if (e.k === 2) { // citizen (free-thinker or affiliated)
+        const free = o.party < 0;
+        const civ = free ? null : world.civs[o.party];
+        const color = free ? NEUTRAL : civ.color;
+        const colorDark = free ? '#7a828c' : (civ.colorDark || civ.color);
+        const old = o.age > o.maxAge * 0.72;
         if (detailed || o.isLeader) {
-          drawPerson(ax.sx, ax.sy, civ.color, civ.colorDark, { leader: o.isLeader, deputy: o.isDeputy, onSea, id: o.id });
+          drawPerson(ax.sx, ax.sy, color, colorDark, { leader: o.isLeader, deputy: o.isDeputy, free, old, id: o.id });
         } else {
-          drawDot(ax.sx, ax.sy, civ.color, TW * 0.14);
+          drawDot(ax.sx, ax.sy, color, TW * (free ? 0.11 : 0.14));
         }
       } else { // city
         drawCity(o, ax.sx, ax.sy);
       }
     }
+
+    // City name labels on top (owned ones earlier, all when zoomed in).
+    if (zoom >= 0.85) {
+      for (const city of world.cities) {
+        if (city.owner < 0 && zoom < 1.4) continue;
+        const ax = anchor(city.x, city.y);
+        drawCityLabel(city, ax.sx, ax.sy);
+      }
+    }
+
     for (const e of world.effects) drawEffect(e);
   }
 

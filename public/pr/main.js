@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=23';
-import { defaultCivs } from './civs.js?v=23';
-import { createWorld } from './sim.js?v=23';
-import { createRenderer } from './render.js?v=23';
-import { POWERS, POWER_BY_ID } from './powers.js?v=23';
-import { avatarDataURL } from './avatar.js?v=23';
+import { generateMap } from './map.js?v=24';
+import { defaultCivs } from './civs.js?v=24';
+import { createWorld } from './sim.js?v=24';
+import { createRenderer } from './render.js?v=24';
+import { POWERS, POWER_BY_ID } from './powers.js?v=24';
+import { avatarDataURL } from './avatar.js?v=24';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -154,7 +154,7 @@ function updatePartyStrip() {
   const totalPop = world.stats.reduce((a, s) => a + s.pop, 0);
   const tot = document.createElement('span');
   tot.className = 'pchip ptot';
-  tot.innerHTML = `👥 <b>${totalPop}</b> población &nbsp; 🧠 <b>${world.free ? world.free.length : 0}</b> indecisos`;
+  tot.innerHTML = `👥 <b>${totalPop}</b> afiliados &nbsp; 🧠 <b>${world.freeCount || 0}</b> librepensadores`;
   el.appendChild(tot);
   world.civs.forEach((c, i) => {
     const s = world.stats[i];
@@ -195,9 +195,10 @@ function renderDeputies() {
       : '';
     if (d) {
       const av = avatarDataURL(d.name + d.id, c.color, { size: 34 });
+      const yrs = Math.floor((d.age || 0) / 5);
       card.innerHTML = `<div class="dep-main"><img class="dep-av" alt="" src="${av}" />
         <div class="dep-info"><div class="dep-name"></div>
-        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')} · ⚔ ${d.kills}</div></div></div>${histHTML}`;
+        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')} · ⏳ ${yrs} a</div></div></div>${histHTML}`;
       card.querySelector('.dep-name').textContent = d.name;
     } else {
       card.innerHTML = `<div class="dep-main"><div class="dep-info"><div class="dep-name dim">— sin nombrar —</div>
@@ -238,13 +239,6 @@ function renderStats() {
     if (ul) prevScroll[card.dataset.civ] = ul.scrollTop;
   });
   el.innerHTML = '';
-  // demografía: edad y antigüedad media por partido (una sola pasada)
-  const N = world.civs.length;
-  const ageSum = new Array(N).fill(0), tenSum = new Array(N).fill(0), cnt = new Array(N).fill(0);
-  for (const u of world.units) {
-    ageSum[u.civ] += u.age; tenSum[u.civ] += (world.tick - u.joined); cnt[u.civ]++;
-  }
-  const yrs = (t) => Math.floor(t / 5);
   const money = (b) => '$' + Math.round(b).toLocaleString('en-US');
 
   // orden fijo por índice de partido — las tarjetas nunca se mueven
@@ -252,14 +246,8 @@ function renderStats() {
     const s = world.stats[i];
     const pct = Math.round((s.territory / land) * 100);
     const budget = world.budget ? world.budget[i] : 0;
-    const avgAge = cnt[i] ? yrs(ageSum[i] / cnt[i]) : 0;
-    const avgTen = cnt[i] ? yrs(tenSum[i] / cnt[i]) : 0;
     const dead = s.units === 0 && s.cities === 0;
     const lead = world.leaders[i];
-    const wars = [];
-    for (let j = 0; j < world.civs.length; j++) {
-      if (j !== i && world.war[i][j]) wars.push(`⚔ ${world.civs[j].name.replace('Los ', '')}`);
-    }
     const av = avatarDataURL(c.leader, c.color, { crown: true, size: 44 });
     const slog = world.successionLog ? world.successionLog[i] : [];
     const succNote = slog.length > 0
@@ -268,7 +256,7 @@ function renderStats() {
     // Jerarquía: Líder → Segundo al mando → un Alcalde por ciudad (con su valor).
     const dep = world.deputy[i];
     const depName = (dep && !dep.dead) ? dep.name : '—';
-    const myCities = world.cities.filter((cc) => cc.civ === i);
+    const myCities = world.cities.filter((cc) => cc.owner === i);
     const alcaldeRows = myCities.length
       ? myCities.map((cc) =>
           `<li><span class="al-city">🏛️ ${cc.name}</span>` +
@@ -301,17 +289,13 @@ function renderStats() {
       <div class="bar"><div style="width:${pct}%;background:${c.color}"></div></div>
       <div class="row"><span>Presupuesto 💰</span><span class="${budget < 0 ? 'neg' : ''}">${money(budget)}</span></div>
       <div class="row dim"><span>(suma del valor de sus ciudades)</span><span></span></div>
-      <div class="row"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
-      <div class="row dim"><span>Edad media</span><span>${avgAge} a</span></div>
-      <div class="row dim"><span>Bajas ⚔</span><span>${world.kills ? world.kills[i] : 0}</span></div>
+      <div class="row"><span>Afiliados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
       ${hierarchy}
       <div class="tags">
-        ${dead ? '<span class="tag dead">eliminado</span>' : ''}
-        ${wars.map((w) => `<span class="tag war">${w}</span>`).join('')}
+        ${dead ? '<span class="tag dead">sin presencia</span>' : ''}
       </div>
       <div class="card-btns">
         <button class="card-btn" data-act="go" data-civ="${i}">📍 Ir al líder</button>
-        <button class="card-btn" data-act="kills" data-civ="${i}">⚔ Bajas</button>
       </div>
     `;
     card.dataset.civ = i;
@@ -322,19 +306,14 @@ function renderStats() {
   });
 }
 
-// Delegated clicks for the leader-card buttons (Ir / Bajas).
+// Delegated click for the leader-card button (Ir al líder).
 $('stats').addEventListener('click', (e) => {
   const b = e.target.closest('.card-btn');
   if (!b) return;
   const i = Number(b.dataset.civ);
   const lead = world.leaders[i];
   if (!lead) return;
-  if (b.dataset.act === 'go') {
-    renderer.focusOn(lead.x, lead.y, 3.2);
-  } else if (b.dataset.act === 'kills') {
-    selected = { kind: 'unit', ref: lead };
-    renderInspector();
-  }
+  if (b.dataset.act === 'go') renderer.focusOn(lead.x, lead.y, 3.2);
 });
 
 // ---- Gráficas: 15 cuadros en vivo ----------------------------------------
@@ -342,28 +321,28 @@ $('stats').addEventListener('click', (e) => {
 // tiempo), 'lineOne' (una serie), 'bars' (un valor por partido), 'donut'
 // (reparto por partido), 'hist' (histograma de un campo por unidad).
 const CHART_DEFS = [
-  { id: 'c1', title: 'Población en el tiempo', kind: 'lines', get: () => world.history.map((h) => h.pop) },
-  { id: 'c2', title: 'Territorio en el tiempo (tiles)', kind: 'lines', get: () => world.history.map((h) => h.terr) },
+  { id: 'c1', title: 'Afiliados por partido (tiempo)', kind: 'lines', get: () => world.history.map((h) => h.pop) },
+  { id: 'c2', title: 'Ciudades por partido (tiempo)', kind: 'lines', get: () => world.history.map((h) => h.terr) },
   { id: 'c3', title: 'Presupuesto en el tiempo ($)', kind: 'lines', get: () => world.history.map((h) => h.budget) },
   { id: 'c4', title: 'Librepensadores en el tiempo', kind: 'lineOne', get: () => world.history.map((h) => h.free) },
-  { id: 'c5', title: 'Población actual', kind: 'bars', get: () => world.stats.map((s) => s.pop) },
-  { id: 'c6', title: 'Territorio actual (%)', kind: 'bars', get: () => world.stats.map((s) => Math.round((s.territory / (world.landCount || 1)) * 100)) },
+  { id: 'c5', title: 'Afiliados actuales', kind: 'bars', get: () => world.stats.map((s) => s.pop) },
+  { id: 'c6', title: 'Ciudades (%)', kind: 'bars', get: () => world.stats.map((s) => Math.round((s.territory / (world.landCount || 1)) * 100)) },
   { id: 'c7', title: 'Ciudades', kind: 'bars', get: () => world.stats.map((s) => s.cities) },
-  { id: 'c8', title: 'Ejército (unidades)', kind: 'bars', get: () => world.stats.map((s) => s.units) },
-  { id: 'c9', title: 'Reclutados (acum.)', kind: 'bars', get: () => world.recruited.slice() },
-  { id: 'c10', title: 'Bajas causadas (acum.)', kind: 'bars', get: () => world.kills.slice() },
+  { id: 'c8', title: 'Afiliados (ciudadanos)', kind: 'bars', get: () => world.stats.map((s) => s.units) },
+  { id: 'c9', title: 'Afiliaciones (acum.)', kind: 'bars', get: () => world.recruited.slice() },
+  { id: 'c10', title: 'Libres vs afiliados', kind: 'donut', get: () => [world.freeCount || 0, world.stats.reduce((a, s) => a + s.pop, 0)] },
   { id: 'c11', title: 'Presupuesto actual ($)', kind: 'bars', get: () => world.budget.map((b) => Math.round(b)) },
-  { id: 'c12', title: 'Reparto del territorio', kind: 'donut', get: () => world.stats.map((s) => s.territory) },
-  { id: 'c13', title: 'Reinado del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 5) : 0)) },
-  { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => unitBuckets((u) => u.age) },
-  { id: 'c15', title: 'Antigüedad en el partido', kind: 'hist', get: () => unitBuckets((u) => world.tick - u.joined) },
+  { id: 'c12', title: 'Reparto de ciudades', kind: 'donut', get: () => world.stats.map((s) => s.cities) },
+  { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 5) : 0)) },
+  { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => citizenBuckets((c) => c.age) },
+  { id: 'c15', title: 'Antigüedad afiliada', kind: 'hist', get: () => citizenBuckets((c) => (c.party >= 0 && c.joined != null) ? (world.tick - c.joined) : 0) },
 ];
 
-function unitBuckets(fn, B = 10) {
+function citizenBuckets(fn, B = 10) {
   const buckets = new Array(B).fill(0);
   let max = 1;
-  for (const u of world.units) { const v = fn(u); if (v > max) max = v; }
-  for (const u of world.units) buckets[Math.min(B - 1, Math.floor((fn(u) / (max + 1)) * B))]++;
+  for (const c of world.citizens) { const v = fn(c); if (v > max) max = v; }
+  for (const c of world.citizens) buckets[Math.min(B - 1, Math.floor((fn(c) / (max + 1)) * B))]++;
   return { buckets, max };
 }
 
@@ -395,10 +374,11 @@ function renderCharts() {
     const W = cv.width, H = cv.height;
     x.clearRect(0, 0, W, H);
     const data = d.get();
+    const cols = d.id === 'c10' ? ['#9aa6b2', '#f4b942'] : colors;
     if (d.kind === 'lines') drawLines(x, W, H, data, colors);
     else if (d.kind === 'lineOne') drawLines(x, W, H, data.map((v) => [v]), ['#f4b942']);
-    else if (d.kind === 'bars') drawBars(x, W, H, data, colors);
-    else if (d.kind === 'donut') drawDonut(x, W, H, data, colors);
+    else if (d.kind === 'bars') drawBars(x, W, H, data, cols);
+    else if (d.kind === 'donut') drawDonut(x, W, H, data, cols);
     else if (d.kind === 'hist') drawHist(x, W, H, data.buckets, '#f4b942', Math.floor(data.max / 5));
   }
 }
@@ -658,65 +638,55 @@ function renderInspector() {
 
   if (selected.kind === 'unit') {
     const u = selected.ref;
-    const c = world.civs[u.civ];
-    const title = c.title || 'Líder';
+    const free = u.party < 0;
+    const c = free ? null : world.civs[u.party];
+    const accent = free ? '#9aa6b2' : c.color;
     const name = u.isLeader ? u.rulerName : u.name;
-    const av = avatarDataURL(u.isLeader ? c.leader : (u.name + u.id), c.color, { crown: u.isLeader, size: 52 });
-    const dead = u.dead ? `<div class="idead">† Cayó en combate</div>` : '';
-    const status = u.isLeader
-      ? `<div class="istatus">${world.leaderStatus(u.civ)}</div>` : '';
+    const av = avatarDataURL(u.isLeader ? (c ? c.leader : name) : (u.name + u.id), accent, { crown: u.isLeader, size: 52 });
+    const affil = free
+      ? (u.committedFree ? 'Librepensador/a comprometido/a' : 'Librepensador/a (indeciso/a)')
+      : ((u.isLeader ? (c.title || 'Líder') : (u.isDeputy ? 'Segundo al mando' : 'Afiliado/a')) + ' · ' + c.name);
+    const status = u.isLeader ? `<div class="istatus">${world.leaderStatus(u.party)}</div>` : '';
+    const joinedRow = (!free && u.joined != null)
+      ? `<div class="irow"><span>Afiliado/a desde</span><span>${formatDate(u.joined)}</span></div>` : '';
     const reign = u.isLeader
-      ? `<div class="irow"><span>Reinado</span><span>${years(world.tick - u.since)} años</span></div>` +
-        `<div class="irow"><span>Reclutados 🧠</span><span>${world.recruited ? world.recruited[u.civ] : 0}</span></div>`
-      : '';
-    // historial de bajas del partido (acumulado, no se pierde al cambiar líder)
-    let killHist = '';
-    if (u.isLeader) {
-      const klog = (world.killLog && world.killLog[u.civ]) || [];
-      if (klog.length) {
-        const items = klog.slice().reverse().map((k) => {
-          const ec = world.civs[k.civ];
-          return `<li>⚔ <b style="color:${ec ? ec.color : '#888'}">${k.name}</b> <span class="dim">(${ec ? ec.name.replace('Los ', '') : '?'})</span></li>`;
-        }).join('');
-        killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas (${klog.length})</div><ul>${items}</ul></div>`;
-      } else {
-        killHist = `<div class="ikills"><div class="ikills-h">Historial de bajas</div><div class="dim">Aún sin bajas.</div></div>`;
-      }
-    }
+      ? `<div class="irow"><span>Mandato</span><span>${years(world.tick - u.since)} años</span></div>` : '';
+    const mob = u.mobility < 0.25 ? 'Sedentario/a' : u.mobility > 0.7 ? 'Trotamundos' : 'Moderada';
     body.innerHTML = `
       <div class="ihead">
         <img class="iface-img" alt="" src="${av}" />
         <div>
-          <div class="iname" style="color:${c.color}"></div>
-          <div class="ipart">${u.isLeader ? title + ' · ' : 'Ciudadano/a · '}${c.name}</div>
+          <div class="iname" style="color:${accent}"></div>
+          <div class="ipart">${affil}</div>
         </div>
       </div>
       ${status}
-      ${dead}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
-      <div class="irow"><span>Unido al partido</span><span>${formatDate(u.joined)}</span></div>
-      <div class="irow"><span>Bajas</span><span>⚔ ${u.kills}</span></div>
+      <div class="irow"><span>Movilidad</span><span>${mob}</span></div>
+      ${joinedRow}
       ${reign}
-      ${killHist}
     `;
     body.querySelector('.iname').textContent = name;
   } else {
     const c = selected.ref;
-    const civ = world.civs[c.civ];
+    const owned = c.owner >= 0;
+    const civ = owned ? world.civs[c.owner] : null;
+    const accent = owned ? civ.color : '#9aa6b2';
+    const alc = c.alcalde || '—';
     body.innerHTML = `
       <div class="ihead">
-        <span class="iface" style="background:${civ.color}">🏙️</span>
+        <span class="iface" style="background:${accent}">🏛️</span>
         <div>
-          <div class="iname" style="color:${civ.color}"></div>
-          <div class="ipart">${civ.name}</div>
+          <div class="iname" style="color:${accent}"></div>
+          <div class="ipart">${owned ? civ.name : 'Neutral (sin partido)'}</div>
         </div>
       </div>
-      <div class="irow"><span>Municipio</span><span></span></div>
-      <div class="irow"><span>Población</span><span>${Math.round(c.pop)}</span></div>
-      <div class="irow"><span>Lealtad</span><span>${Math.round(c.loyalty)}%</span></div>
+      <div class="irow"><span>Municipio</span><span>${c.muni || '—'}</span></div>
+      <div class="irow"><span>Habitantes</span><span>${Math.round(c.pop)}</span></div>
+      <div class="irow"><span>Valor 💰</span><span>$${Math.round(c.worth || 0).toLocaleString('en-US')}</span></div>
+      <div class="irow"><span>Alcalde/sa</span><span>${alc}</span></div>
     `;
     body.querySelector('.iname').textContent = c.name;
-    body.querySelectorAll('.irow span:last-child')[0].textContent = c.muni || '—';
   }
   el.classList.remove('hidden');
 }
