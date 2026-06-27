@@ -255,19 +255,40 @@ body {
 }
 .card-btn:active { background: var(--accent); color: #2a1d00; }
 .event-log.big { max-height: 440px; }
-/* Segundos al mando */
-.deputies { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
-@media (max-width: 1100px) { .deputies { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .deputies { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 460px) { .deputies { grid-template-columns: 1fr; } }
-.deputy { display: flex; flex-direction: column; gap: 5px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
-.dep-main { display: flex; align-items: center; gap: 8px; }
-.dep-av { width: 30px; height: 30px; border-radius: 7px; image-rendering: pixelated; border: 1px solid var(--line); }
-.dep-name { font-weight: 700; font-size: 0.82rem; }
-.dep-sub { font-size: 0.72rem; }
-.dep-hist { list-style: none; margin: 0; padding: 4px 0 0; border-top: 1px solid var(--line); }
-.dep-hist-item { font-size: 0.68rem; color: var(--muted); padding: 1px 0; display: flex; justify-content: space-between; }
 .succ-note { font-size: 0.7rem; color: #ff8d8d; background: rgba(180,50,50,0.13); border-radius: 6px; padding: 3px 7px; margin: 0 0 5px; }
+
+/* Historia moderna (Crónica de la isla) */
+.event-log.modern {
+  list-style: none; margin: 0; padding: 4px; max-height: 520px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.event-log.modern .ev-day {
+  position: sticky; top: 0; z-index: 1;
+  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent);
+  background: linear-gradient(180deg, var(--panel-2), rgba(31,44,58,0.86));
+  border: 1px solid var(--line); border-radius: 7px;
+  padding: 4px 9px; margin: 6px 2px 2px;
+  backdrop-filter: blur(2px);
+}
+.event-log.modern .ev-day:first-child { margin-top: 2px; }
+.event-log.modern .ev {
+  display: grid; grid-template-columns: 10px 1fr auto; align-items: baseline; gap: 9px;
+  padding: 7px 9px; border-radius: 8px; transition: background 0.12s;
+}
+.event-log.modern .ev:hover { background: var(--panel-2); }
+.event-log.modern .ev + .ev { border-top: 1px solid rgba(43,58,74,0.45); }
+.event-log.modern .ev-dot {
+  width: 10px; height: 10px; border-radius: 50%; align-self: center;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.25);
+}
+.event-log.modern .ev-text { font-size: 0.92rem; line-height: 1.4; color: var(--ink); min-width: 0; }
+.event-log.modern .ev-time {
+  font-size: 0.66rem; font-weight: 700; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: var(--panel-2); border-radius: 6px; padding: 2px 6px;
+}
 
 /* Jerarquía de liderazgo en la tarjeta */
 .hierarchy { margin: 8px 0 4px; border-top: 1px solid var(--line); padding-top: 7px; }

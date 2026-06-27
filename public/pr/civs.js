@@ -104,19 +104,52 @@ export const CITY_NAMES = [
 
 // Eventos satíricos aleatorios. {civ} se reemplaza por el nombre del partido.
 export const FLAVOR_EVENTS = [
+  // PNP — estadistas de línea dura
   { civ: 'pnp', text: '🔌 Apagón general: LUMA deja a {civ} a oscuras otra vez.' },
   { civ: 'pnp', text: '💸 Escándalo de corrupción sacude a {civ}; nadie se sorprende.' },
   { civ: 'pnp', text: '🤡 {civ} leyó mal el mapa y marchó hacia un pantano.' },
+  { civ: 'pnp', text: '🗳️ {civ} convoca otro plebiscito de estadidad… el quinto ya.' },
+  { civ: 'pnp', text: '🇺🇸 {civ} pinta otra estrella 51 en la plaza pública.' },
+  { civ: 'pnp', text: '🏗️ {civ} inaugura una obra a medio terminar con bombo y platillo.' },
+  // PPD — la maquinaria del ELA
   { civ: 'ppd', text: '🤝 {civ} cuadra un pacto entre bastidores; la maquinaria ronronea.' },
-  { civ: 'ppd', text: '🎩 {civ} se ponen la pava y conquistan el campo.' },
+  { civ: 'ppd', text: '🎩 {civ} se pone la pava y conquista el campo.' },
+  { civ: 'ppd', text: '🍢 {civ} reparte lechón y pasteles en la asamblea del partido.' },
+  { civ: 'ppd', text: '📻 {civ} domina la radio con jingles pegajosos.' },
+  { civ: 'ppd', text: '🏛️ {civ} promete autonomía… mañana, siempre mañana.' },
+  // MVC — anticorrupción y juventud
   { civ: 'mvc', text: '✊ {civ} llena la plaza con una marcha anticorrupción.' },
   { civ: 'mvc', text: '📚 {civ} copa la universidad; las ideas nuevas se riegan.' },
+  { civ: 'mvc', text: '🔍 {civ} destapa un chat vergonzoso y la gente estalla.' },
+  { civ: 'mvc', text: '🎓 {civ} gana el voto joven con un meme certero.' },
+  { civ: 'mvc', text: '♻️ {civ} organiza una limpieza de playas multitudinaria.' },
+  // PIP / Independentistas
   { civ: 'ind', text: '🌿 {civ} iza la monoestrellada en la montaña; sube la moral.' },
+  { civ: 'ind', text: '🎶 Una peña de {civ} canta a Lares hasta el amanecer.' },
+  { civ: 'ind', text: '📜 {civ} recuerda el Grito de Lares y enciende los ánimos.' },
+  { civ: 'ind', text: '🐸 {civ} adopta el coquí como símbolo de resistencia.' },
+  { civ: 'ind', text: '🌾 {civ} defiende la tierra contra otra megatienda.' },
+  // Eliezer Molina — independiente popular
   { civ: 'molina', text: '📱 Un video de {civ} se hace viral y arrasa en las redes.' },
   { civ: 'molina', text: '🚜 {civ} reparte cosecha del país y gana corazones.' },
+  { civ: 'molina', text: '🎣 {civ} llega en lancha a un pueblo costero a dar la mano.' },
+  { civ: 'molina', text: '🛠️ {civ} arregla un tramo de carretera que el gobierno olvidó.' },
+  // any — sabor de toda la isla
   { civ: 'any', text: '🦟 Brote de dengue ralentiza a {civ}.' },
   { civ: 'any', text: '🏝️ Temporada turística en auge para {civ}.' },
-  { civ: 'any', text: '📉 La Junta de control fiscal aprieta a {civ}.' },
+  { civ: 'any', text: '📉 La Junta de Control Fiscal aprieta a {civ}.' },
+  { civ: 'any', text: '🎉 Las fiestas de la Calle San Sebastián paralizan a {civ}.' },
+  { civ: 'any', text: '🥁 La fiesta de Santiago Apóstol en Loíza retumba para {civ}.' },
+  { civ: 'any', text: '⚾ La novena del pueblo de {civ} gana el campeonato de la Doble A.' },
+  { civ: 'any', text: '🎺 Una descarga de salsa une a la gente de {civ}.' },
+  { civ: 'any', text: '☕ Cosecha récord de café en la altura favorece a {civ}.' },
+  { civ: 'any', text: '🍌 Sube el precio del plátano y todos miran a {civ}.' },
+  { civ: 'any', text: '🌀 Un huracán amenaza y {civ} corre a los colmados.' },
+  { civ: 'any', text: '🌊 Una marejada ciclónica azota la costa de {civ}.' },
+  { civ: 'any', text: '🌎 Un temblor sacude la isla; {civ} aguanta la respiración.' },
+  { civ: 'any', text: '🎆 Noche de San Juan: todos se tiran al mar de espaldas por {civ}.' },
+  { civ: 'any', text: '🍢 Festival del pastel y la alcapurria desborda la plaza de {civ}.' },
+  { civ: 'any', text: '📰 Un editorial del periódico elogia (o destroza) a {civ}.' },
 ];
 
 // Nombres de ciudadanos: figuras boricuas (próceres, artistas, atletas,

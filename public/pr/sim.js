@@ -18,8 +18,8 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=24';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=24';
+} from './map.js?v=25';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=25';
 
 // --- Tunables -------------------------------------------------------------
 const MAX_CITIZENS = 2600;
@@ -418,7 +418,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
 
   // ---- Ambient flavor + summary ----------------------------------------
   function maybeFlavorEvent() {
-    if (rng() > 0.015) return;
+    if (rng() > 0.03) return;
     const ev = FLAVOR_EVENTS[(rng() * FLAVOR_EVENTS.length) | 0];
     const civIndex = ev.civ === 'any' ? (rng() * N) | 0 : CIV_INDEX[ev.civ];
     const c = t.civs[civIndex];

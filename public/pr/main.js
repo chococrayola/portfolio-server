@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=24';
-import { defaultCivs } from './civs.js?v=24';
-import { createWorld } from './sim.js?v=24';
-import { createRenderer } from './render.js?v=24';
-import { POWERS, POWER_BY_ID } from './powers.js?v=24';
-import { avatarDataURL } from './avatar.js?v=24';
+import { generateMap } from './map.js?v=25';
+import { defaultCivs } from './civs.js?v=25';
+import { createWorld } from './sim.js?v=25';
+import { createRenderer } from './render.js?v=25';
+import { POWERS, POWER_BY_ID } from './powers.js?v=25';
+import { avatarDataURL } from './avatar.js?v=25';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -69,7 +69,6 @@ function buildWorld() {
   renderer.draw();
   buildCharts();
   renderStats();
-  renderDeputies();
   renderLog();
   renderCharts();
   updateClock();
@@ -118,20 +117,21 @@ function gameTime(ticks) {
   return { hour, day, month, year, decade: Math.floor(year / 10), century: Math.floor(year / 100) };
 }
 const pad = (n) => String(n).padStart(2, '0');
+const BASE_YEAR = 48; // el calendario arranca en "Año 48 · Mes 1 · Día 1"
 function formatClock(ticks) {
   const t = gameTime(ticks);
   let era = '';
   if (t.century > 0) era = `Siglo ${t.century + 1} · `;
   else if (t.decade > 0) era = `Década ${t.decade} · `;
-  return `📅 ${era}Año ${t.year} · Mes ${t.month} · Día ${t.day} · ${pad(t.hour)}:00`;
+  return `📅 ${era}Año ${t.year + BASE_YEAR} · Mes ${t.month} · Día ${t.day} · ${pad(t.hour)}:00`;
 }
 function formatStamp(ticks) {
   const t = gameTime(ticks);
-  return `A${t.year} M${t.month} D${t.day}`;
+  return `A${t.year + BASE_YEAR} M${t.month} D${t.day}`;
 }
 function formatDate(ticks) {
   const t = gameTime(ticks);
-  return `Año ${t.year}, Mes ${t.month}, Día ${t.day}`;
+  return `Año ${t.year + BASE_YEAR}, Mes ${t.month}, Día ${t.day}`;
 }
 
 function updateClock() {
@@ -178,41 +178,10 @@ function updatePartyStrip() {
   });
 }
 
-// ---- Segundos al mando (barra) -------------------------------------------
-function renderDeputies() {
-  const el = $('deputies');
-  if (!el) return;
-  el.innerHTML = '';
-  world.civs.forEach((c, i) => {
-    const d = world.deputy[i];
-    const card = document.createElement('div');
-    card.className = 'deputy';
-    // Deputy history: entries that have ended (have a 'to' date), newest first
-    const dlog = world.deputyLog ? world.deputyLog[i] : [];
-    const past = dlog.filter((e) => e.to !== null).slice(-3).reverse();
-    const histHTML = past.length > 0
-      ? `<ul class="dep-hist">${past.map((e) => `<li class="dep-hist-item"><span>${e.name}</span> <span class="dim">${formatStamp(e.from)}</span></li>`).join('')}</ul>`
-      : '';
-    if (d) {
-      const av = avatarDataURL(d.name + d.id, c.color, { size: 34 });
-      const yrs = Math.floor((d.age || 0) / 5);
-      card.innerHTML = `<div class="dep-main"><img class="dep-av" alt="" src="${av}" />
-        <div class="dep-info"><div class="dep-name"></div>
-        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')} · ⏳ ${yrs} a</div></div></div>${histHTML}`;
-      card.querySelector('.dep-name').textContent = d.name;
-    } else {
-      card.innerHTML = `<div class="dep-main"><div class="dep-info"><div class="dep-name dim">— sin nombrar —</div>
-        <div class="dep-sub" style="color:${c.color}">${c.name.replace('Los ', '')}</div></div></div>${histHTML}`;
-    }
-    el.appendChild(card);
-  });
-}
-
 // HUD panels refresh on a gentler cadence than the render loop.
 setInterval(() => {
   if (world) {
     renderStats();
-    renderDeputies();
     // Only rebuild the history list when the reader is at the top; otherwise
     // the periodic rebuild would yank the scroll position back up.
     const lg = $('eventLog');
@@ -465,18 +434,33 @@ function noData(x, W, H) {
 function renderLog() {
   const el = $('eventLog');
   el.innerHTML = '';
-  for (const e of world.events.slice(0, 90)) {
+  let lastDay = null;
+  for (const e of world.events.slice(0, 120)) {
+    // Date separator whenever the in-game day changes (events are newest-first).
+    const g = gameTime(e.tick);
+    const dayKey = `${g.year}-${g.month}-${g.day}`;
+    if (dayKey !== lastDay) {
+      lastDay = dayKey;
+      const sep = document.createElement('li');
+      sep.className = 'ev-day';
+      sep.textContent = `Año ${g.year + BASE_YEAR} · Mes ${g.month} · Día ${g.day}`;
+      el.appendChild(sep);
+    }
+    const color = e.civ != null ? world.civs[e.civ].color : '#7c8a99';
     const li = document.createElement('li');
-    const color = e.civ != null ? world.civs[e.civ].color : 'var(--muted)';
+    li.className = 'ev';
+    const dot = document.createElement('span');
+    dot.className = 'ev-dot';
+    dot.style.background = color;
     const text = document.createElement('span');
+    text.className = 'ev-text';
     text.textContent = e.text; // textContent avoids HTML injection from names
-    text.style.borderLeft = `3px solid ${color}`;
-    text.style.paddingLeft = '8px';
-    const t = document.createElement('span');
-    t.className = 't';
-    t.textContent = formatStamp(e.tick);
-    li.appendChild(t);
+    const time = document.createElement('span');
+    time.className = 'ev-time';
+    time.textContent = `${pad(g.hour)}:00`;
+    li.appendChild(dot);
     li.appendChild(text);
+    li.appendChild(time);
     el.appendChild(li);
   }
 }
