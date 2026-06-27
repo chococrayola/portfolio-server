@@ -12,7 +12,8 @@
  *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=26';
+import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=27';
+import { MGRID, OCEAN_ID } from './municipios.js?v=27';
 
 const NEUTRAL = '#9aa6b2'; // color for unclaimed cities / free-thinkers
 const ABBR_BY_NAME = {};
@@ -206,6 +207,36 @@ export function createRenderer(canvas, world) {
     }
   }
 
+  // Municipio boundary lines ("city dividers"): draw the shared top-diamond edge
+  // between any two land tiles that belong to different municipios. Drawn after
+  // all slabs so the lines sit on top of the terrain.
+  function bakeBorders(d) {
+    d.save();
+    d.lineWidth = 1;
+    d.lineCap = 'round';
+    d.strokeStyle = 'rgba(16,24,34,0.55)';
+    d.beginPath();
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const here = MGRID[idx(x, y)];
+        if (here === OCEAN_ID) continue;
+        const e = elevOf(world.tiles[idx(x, y)]);
+        const cx = originX + isoX(x, y);
+        const topY = originY + isoY(x, y, e);
+        if (x + 1 < COLS) {
+          const nb = MGRID[idx(x + 1, y)];
+          if (nb !== OCEAN_ID && nb !== here) { d.moveTo(cx + HW, topY); d.lineTo(cx, topY + HH); }
+        }
+        if (y + 1 < ROWS) {
+          const nb = MGRID[idx(x, y + 1)];
+          if (nb !== OCEAN_ID && nb !== here) { d.moveTo(cx - HW, topY); d.lineTo(cx, topY + HH); }
+        }
+      }
+    }
+    d.stroke();
+    d.restore();
+  }
+
   function bakeTerrain() {
     tctx.clearRect(0, 0, W, H);
     for (let s = 0; s <= COLS + ROWS - 2; s++) {
@@ -213,6 +244,7 @@ export function createRenderer(canvas, world) {
       const xMax = Math.min(COLS - 1, s);
       for (let x = xMin; x <= xMax; x++) bakeTile(tctx, x, s - x);
     }
+    bakeBorders(tctx);
   }
 
   // ---- Sprites ----------------------------------------------------------

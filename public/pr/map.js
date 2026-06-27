@@ -7,7 +7,7 @@
  * San Juan metro, and coastal beaches) painted on top of the real coastline.
  */
 
-import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js?v=26';
+import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js?v=27';
 
 export const COLS = MCOLS;
 export const ROWS = MROWS;

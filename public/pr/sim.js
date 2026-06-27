@@ -18,8 +18,8 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=26';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=26';
+} from './map.js?v=27';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=27';
 
 // --- Tunables -------------------------------------------------------------
 const MAX_CITIZENS = 2600;
@@ -574,7 +574,6 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     if (t.winner !== null) return;
     t.tick++;
     updateCitizens();
-    updateAnimals();
     updateEffects();
     checkSuccession();
     maybeFlavorEvent();
@@ -646,7 +645,6 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
 
   // ---- Boot -------------------------------------------------------------
   seedCities();
-  seedAnimals();
   seedCitizens();
   return world;
 }
