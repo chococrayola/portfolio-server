@@ -18,12 +18,12 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=27';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=27';
+} from './map.js?v=28';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=28';
 
 // --- Tunables -------------------------------------------------------------
 const MAX_CITIZENS = 2600;
-const AGE_RATE = 0.2;        // age grows slower than the game clock
+// 1 tick = 1 month; ages/lifespans are tracked in ticks (×12 = years).
 const MOVE_BASE = 0.55;      // base move propensity per tick
 const AFFIL_EVERY = 24;      // ticks between affiliation checks per citizen
 const BIRTH_EVERY = 90;      // ticks between birth checks per adult
@@ -172,9 +172,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       id: t.nextId++,
       x: spot.x, y: spot.y,
       party,                              // -1 = free-thinker
-      age: 0,
-      maxAge: 100 + ((rng() * 800) | 0),  // wide spread: short- to long-lived
-      adultAt: 25 + ((rng() * 45) | 0),
+      age: 0,                             // edad en ticks (1 tick = 1 mes)
+      maxAge: Math.round((60 + rng() * 45) * 12), // ~60–105 años; mueren cerca de 100
+      adultAt: Math.round((16 + rng() * 6) * 12), // mayoría de edad ~16–22 años
       mobility: Math.pow(rng(), 1.4),     // many low, some high; a few ~never move
       openness: 0.45 + rng() * 0.55,
       committedFree: false,
@@ -264,7 +264,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     const survivors = [];
     const newborns = [];
     for (const c of t.citizens) {
-      c.age += AGE_RATE;
+      c.age += 1;
       if (c.age > c.maxAge) { c.dead = true; continue; } // dies of old age
       moveCitizen(c);
       if (c.party < 0 && !c.committedFree && c.age >= c.adultAt && (t.tick + c.id) % AFFIL_EVERY === 0) {
@@ -439,22 +439,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   }
 
   // ---- Win check --------------------------------------------------------
-  function checkWinner() {
-    const total = t.cities.length || 1;
-    for (let p = 0; p < N; p++) {
-      if (t.stats[p].cities / total >= DOMINANCE) {
-        t.winner = p;
-        log(`👑 ¡${t.civs[p].name} domina la mayoría de los pueblos y gana la isla!`, p);
-        return;
-      }
-    }
-    let withCities = 0, only = -1;
-    for (let p = 0; p < N; p++) if (t.stats[p].cities > 0) { withCities++; only = p; }
-    if (withCities === 1 && t.tick > 400) {
-      t.winner = only;
-      log(`👑 ¡${t.civs[only].name} es la única fuerza en pie y gana la isla!`, only);
-    }
-  }
+  // El juego es una caja de arena infinita: nunca hay ganador, nunca se detiene.
+  function checkWinner() { /* sin ganador: la isla evoluciona para siempre */ }
 
   // ---- Animals (ambient, untouched) -------------------------------------
   const ANIMAL = { SHEEP: 0, WOLF: 1, FISH: 2, BIRD: 3 };

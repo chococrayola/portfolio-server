@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=27';
-import { defaultCivs } from './civs.js?v=27';
-import { createWorld } from './sim.js?v=27';
-import { createRenderer } from './render.js?v=27';
-import { POWERS, POWER_BY_ID } from './powers.js?v=27';
-import { avatarDataURL } from './avatar.js?v=27';
+import { generateMap } from './map.js?v=28';
+import { defaultCivs } from './civs.js?v=28';
+import { createWorld } from './sim.js?v=28';
+import { createRenderer } from './render.js?v=28';
+import { POWERS, POWER_BY_ID } from './powers.js?v=28';
+import { avatarDataURL } from './avatar.js?v=28';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -106,32 +106,25 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-// ---- Game calendar (1 tick = 1 hour) ------------------------------------
+// ---- Game calendar (1 tick = 1 month) -----------------------------------
+// Un mes por turno: así la edad de la gente (en años) avanza al mismo ritmo
+// que el calendario y las generaciones se ven nacer y morir (~100 años).
+const BASE_YEAR = 48; // el calendario arranca en "Año 48 · Mes 1"
 function gameTime(ticks) {
-  const hour = ticks % 24;
-  const totalDays = Math.floor(ticks / 24);
-  const day = (totalDays % 30) + 1;
-  const totalMonths = Math.floor(totalDays / 30);
-  const month = (totalMonths % 12) + 1;
-  const year = Math.floor(totalMonths / 12);
-  return { hour, day, month, year, decade: Math.floor(year / 10), century: Math.floor(year / 100) };
+  return { month: (ticks % 12) + 1, year: Math.floor(ticks / 12) };
 }
-const pad = (n) => String(n).padStart(2, '0');
-const BASE_YEAR = 48; // el calendario arranca en "Año 48 · Mes 1 · Día 1"
+const yearsOf = (ticks) => Math.floor(ticks / 12); // ticks → años
 function formatClock(ticks) {
   const t = gameTime(ticks);
-  let era = '';
-  if (t.century > 0) era = `Siglo ${t.century + 1} · `;
-  else if (t.decade > 0) era = `Década ${t.decade} · `;
-  return `📅 ${era}Año ${t.year + BASE_YEAR} · Mes ${t.month} · Día ${t.day} · ${pad(t.hour)}:00`;
+  return `📅 Año ${t.year + BASE_YEAR} · Mes ${t.month}`;
 }
 function formatStamp(ticks) {
   const t = gameTime(ticks);
-  return `A${t.year + BASE_YEAR} M${t.month} D${t.day}`;
+  return `A${t.year + BASE_YEAR} M${t.month}`;
 }
 function formatDate(ticks) {
   const t = gameTime(ticks);
-  return `Año ${t.year + BASE_YEAR}, Mes ${t.month}, Día ${t.day}`;
+  return `Año ${t.year + BASE_YEAR}, Mes ${t.month}`;
 }
 
 function updateClock() {
@@ -309,7 +302,7 @@ const CHART_DEFS = [
   { id: 'c10', title: 'Libres vs afiliados', kind: 'donut', get: () => [world.freeCount || 0, world.stats.reduce((a, s) => a + s.pop, 0)] },
   { id: 'c11', title: 'Presupuesto actual ($)', kind: 'bars', get: () => world.budget.map((b) => Math.round(b)) },
   { id: 'c12', title: 'Reparto de ciudades', kind: 'donut', get: () => world.stats.map((s) => s.cities) },
-  { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 5) : 0)) },
+  { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 12) : 0)) },
   { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => citizenBuckets((c) => c.age) },
   { id: 'c15', title: 'Antigüedad afiliada', kind: 'hist', get: () => citizenBuckets((c) => (c.party >= 0 && c.joined != null) ? (world.tick - c.joined) : 0) },
 ];
@@ -355,7 +348,7 @@ function renderCharts() {
     else if (d.kind === 'lineOne') drawLines(x, W, H, data.map((v) => [v]), ['#f4b942']);
     else if (d.kind === 'bars') drawBars(x, W, H, data, cols);
     else if (d.kind === 'donut') drawDonut(x, W, H, data, cols);
-    else if (d.kind === 'hist') drawHist(x, W, H, data.buckets, '#f4b942', Math.floor(data.max / 5));
+    else if (d.kind === 'hist') drawHist(x, W, H, data.buckets, '#f4b942', Math.floor(data.max / 12));
   }
 }
 
@@ -441,16 +434,15 @@ function noData(x, W, H) {
 function renderLog() {
   const el = $('eventLog');
   el.innerHTML = '';
-  let lastDay = null;
+  let lastYear = null;
   for (const e of world.events.slice(0, 120)) {
-    // Date separator whenever the in-game day changes (events are newest-first).
+    // Year separator (events are newest-first); each row tags its month.
     const g = gameTime(e.tick);
-    const dayKey = `${g.year}-${g.month}-${g.day}`;
-    if (dayKey !== lastDay) {
-      lastDay = dayKey;
+    if (g.year !== lastYear) {
+      lastYear = g.year;
       const sep = document.createElement('li');
       sep.className = 'ev-day';
-      sep.textContent = `Año ${g.year + BASE_YEAR} · Mes ${g.month} · Día ${g.day}`;
+      sep.textContent = `Año ${g.year + BASE_YEAR}`;
       el.appendChild(sep);
     }
     const color = e.civ != null ? world.civs[e.civ].color : '#7c8a99';
@@ -464,7 +456,7 @@ function renderLog() {
     text.textContent = e.text; // textContent avoids HTML injection from names
     const time = document.createElement('span');
     time.className = 'ev-time';
-    time.textContent = `${pad(g.hour)}:00`;
+    time.textContent = `Mes ${g.month}`;
     li.appendChild(dot);
     li.appendChild(text);
     li.appendChild(time);
@@ -625,7 +617,7 @@ function renderInspector() {
   const el = $('inspector');
   if (!selected) { el.classList.add('hidden'); return; }
   const body = $('inspBody');
-  const years = (ticks) => Math.floor(ticks / 5);
+  const years = (ticks) => Math.floor(ticks / 12);
 
   if (selected.kind === 'unit') {
     const u = selected.ref;

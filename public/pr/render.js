@@ -12,8 +12,8 @@
  *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=27';
-import { MGRID, OCEAN_ID } from './municipios.js?v=27';
+import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=28';
+import { MGRID, OCEAN_ID } from './municipios.js?v=28';
 
 const NEUTRAL = '#9aa6b2'; // color for unclaimed cities / free-thinkers
 const ABBR_BY_NAME = {};
