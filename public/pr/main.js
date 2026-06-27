@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=25';
-import { defaultCivs } from './civs.js?v=25';
-import { createWorld } from './sim.js?v=25';
-import { createRenderer } from './render.js?v=25';
-import { POWERS, POWER_BY_ID } from './powers.js?v=25';
-import { avatarDataURL } from './avatar.js?v=25';
+import { generateMap } from './map.js?v=26';
+import { defaultCivs } from './civs.js?v=26';
+import { createWorld } from './sim.js?v=26';
+import { createRenderer } from './render.js?v=26';
+import { POWERS, POWER_BY_ID } from './powers.js?v=26';
+import { avatarDataURL } from './avatar.js?v=26';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
@@ -225,12 +225,19 @@ function renderStats() {
     // Jerarquía: Líder → Segundo al mando → un Alcalde por ciudad (con su valor).
     const dep = world.deputy[i];
     const depName = (dep && !dep.dead) ? dep.name : '—';
-    const myCities = world.cities.filter((cc) => cc.owner === i);
+    // Mostrar los pueblos más valiosos (lista compacta y de altura fija para que
+    // la tarjeta no crezca sin control al ganar ciudades).
+    const myCities = world.cities.filter((cc) => cc.owner === i)
+      .sort((a, b) => (b.worth || 0) - (a.worth || 0));
+    const TOP_ALC = 6;
+    const shownCities = myCities.slice(0, TOP_ALC);
+    const extraCities = myCities.length - shownCities.length;
     const alcaldeRows = myCities.length
-      ? myCities.map((cc) =>
+      ? shownCities.map((cc) =>
           `<li><span class="al-city">🏛️ ${cc.name}</span>` +
           `<span class="al-who">${cc.alcalde || '—'}</span>` +
-          `<span class="al-worth">${money(cc.worth || 0)}</span></li>`).join('')
+          `<span class="al-worth">${money(cc.worth || 0)}</span></li>`).join('') +
+        (extraCities > 0 ? `<li class="al-more">+${extraCities} pueblo${extraCities > 1 ? 's' : ''} más</li>` : '')
       : '<li class="dim">Sin ciudades todavía</li>';
     const hierarchy = `
       <div class="hierarchy">

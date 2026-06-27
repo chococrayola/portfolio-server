@@ -18,8 +18,8 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=25';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=25';
+} from './map.js?v=26';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=26';
 
 // --- Tunables -------------------------------------------------------------
 const MAX_CITIZENS = 2600;

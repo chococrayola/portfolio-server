@@ -259,10 +259,12 @@ body {
 
 /* Historia moderna (Crónica de la isla) */
 .event-log.modern {
-  list-style: none; margin: 0; padding: 4px; max-height: 520px; overflow-y: auto;
+  list-style: none; margin: 0; padding: 4px; max-height: 460px; overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   display: flex; flex-direction: column; gap: 1px;
 }
+@media (max-width: 1000px) { .event-log.modern { max-height: 300px; } }
 .event-log.modern .ev-day {
   position: sticky; top: 0; z-index: 1;
   font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
@@ -296,7 +298,7 @@ body {
 .hr-rank { color: var(--muted); }
 .hr-name { font-weight: 700; text-align: right; }
 .hr-alc-h { font-size: 0.8rem; color: var(--muted); font-weight: 700; margin: 7px 0 3px; }
-/* Sin scroll interno: se muestran todos los alcaldes y la página se desplaza. */
+/* Lista compacta de altura acotada (top pueblos) — la tarjeta no crece sin fin. */
 .hr-alc { list-style: none; margin: 0; padding: 0; }
 .hr-alc li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: baseline;
   font-size: 0.82rem; padding: 3px 0; border-bottom: 1px solid rgba(43,58,74,0.5); }
@@ -304,6 +306,8 @@ body {
 .hr-alc .al-city { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hr-alc .al-who { color: var(--muted); white-space: nowrap; }
 .hr-alc .al-worth { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hr-alc .al-more { display: block; grid-template-columns: none; color: var(--muted); font-style: italic;
+  font-size: 0.76rem; padding-top: 5px; border-bottom: none; }
 .card-status {
   font-size: 0.74rem;
   font-weight: 700;
