@@ -5,15 +5,15 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=28';
-import { defaultCivs } from './civs.js?v=28';
-import { createWorld } from './sim.js?v=28';
-import { createRenderer } from './render.js?v=28';
-import { POWERS, POWER_BY_ID } from './powers.js?v=28';
-import { avatarDataURL } from './avatar.js?v=28';
+import { generateMap } from './map.js?v=29';
+import { defaultCivs } from './civs.js?v=29';
+import { createWorld } from './sim.js?v=29';
+import { createRenderer } from './render.js?v=29';
+import { POWERS, POWER_BY_ID } from './powers.js?v=29';
+import { avatarDataURL } from './avatar.js?v=29';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
-const PAINTABLE = new Set(['land', 'water', 'mountain', 'forest', 'spawn']);
+const PAINTABLE = new Set(['spawn', 'free']);
 
 const $ = (id) => document.getElementById(id);
 
@@ -106,25 +106,29 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-// ---- Game calendar (1 tick = 1 month) -----------------------------------
-// Un mes por turno: así la edad de la gente (en años) avanza al mismo ritmo
-// que el calendario y las generaciones se ven nacer y morir (~100 años).
-const BASE_YEAR = 48; // el calendario arranca en "Año 48 · Mes 1"
+// ---- Game calendar (1 tick = 1 DAY; 30-day months, 360-day years) -------
+// Un día por turno: la edad (en años) avanza con el calendario, que arranca el
+// 1/1/148 y corre lento. Formato de fecha: D/M/AAA.
+const BASE_YEAR = 148;       // el calendario arranca el 1/1/148
+const YEAR_DAYS = 360, MONTH_DAYS = 30;
 function gameTime(ticks) {
-  return { month: (ticks % 12) + 1, year: Math.floor(ticks / 12) };
+  const day = (ticks % MONTH_DAYS) + 1;
+  const month = (Math.floor(ticks / MONTH_DAYS) % 12) + 1;
+  const year = Math.floor(ticks / YEAR_DAYS) + BASE_YEAR;
+  return { day, month, year };
 }
-const yearsOf = (ticks) => Math.floor(ticks / 12); // ticks → años
+const yearsOf = (ticks) => Math.floor(ticks / YEAR_DAYS); // ticks(días) → años
 function formatClock(ticks) {
   const t = gameTime(ticks);
-  return `📅 Año ${t.year + BASE_YEAR} · Mes ${t.month}`;
+  return `📅 ${t.day}/${t.month}/${t.year}`;
 }
 function formatStamp(ticks) {
   const t = gameTime(ticks);
-  return `A${t.year + BASE_YEAR} M${t.month}`;
+  return `${t.day}/${t.month}/${t.year}`;
 }
 function formatDate(ticks) {
   const t = gameTime(ticks);
-  return `Año ${t.year + BASE_YEAR}, Mes ${t.month}`;
+  return `${t.day}/${t.month}/${t.year}`;
 }
 
 function updateClock() {
@@ -258,6 +262,7 @@ function renderStats() {
       <div class="bar"><div style="width:${pct}%;background:${c.color}"></div></div>
       <div class="row"><span>Presupuesto 💰</span><span class="${budget < 0 ? 'neg' : ''}">${money(budget)}</span></div>
       <div class="row dim"><span>(suma del valor de sus ciudades)</span><span></span></div>
+      <div class="row"><span>Balance del líder 💵</span><span>${lead ? money(lead.balance || 0) : '—'}</span></div>
       <div class="row"><span>Afiliados 🧠</span><span>${world.recruited ? world.recruited[i] : 0}</span></div>
       ${hierarchy}
       <div class="tags">
@@ -302,7 +307,7 @@ const CHART_DEFS = [
   { id: 'c10', title: 'Libres vs afiliados', kind: 'donut', get: () => [world.freeCount || 0, world.stats.reduce((a, s) => a + s.pop, 0)] },
   { id: 'c11', title: 'Presupuesto actual ($)', kind: 'bars', get: () => world.budget.map((b) => Math.round(b)) },
   { id: 'c12', title: 'Reparto de ciudades', kind: 'donut', get: () => world.stats.map((s) => s.cities) },
-  { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 12) : 0)) },
+  { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 360) : 0)) },
   { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => citizenBuckets((c) => c.age) },
   { id: 'c15', title: 'Antigüedad afiliada', kind: 'hist', get: () => citizenBuckets((c) => (c.party >= 0 && c.joined != null) ? (world.tick - c.joined) : 0) },
 ];
@@ -348,7 +353,7 @@ function renderCharts() {
     else if (d.kind === 'lineOne') drawLines(x, W, H, data.map((v) => [v]), ['#f4b942']);
     else if (d.kind === 'bars') drawBars(x, W, H, data, cols);
     else if (d.kind === 'donut') drawDonut(x, W, H, data, cols);
-    else if (d.kind === 'hist') drawHist(x, W, H, data.buckets, '#f4b942', Math.floor(data.max / 12));
+    else if (d.kind === 'hist') drawHist(x, W, H, data.buckets, '#f4b942', Math.floor(data.max / 360));
   }
 }
 
@@ -442,7 +447,7 @@ function renderLog() {
       lastYear = g.year;
       const sep = document.createElement('li');
       sep.className = 'ev-day';
-      sep.textContent = `Año ${g.year + BASE_YEAR}`;
+      sep.textContent = `Año ${g.year}`;
       el.appendChild(sep);
     }
     const color = e.civ != null ? world.civs[e.civ].color : '#7c8a99';
@@ -456,7 +461,7 @@ function renderLog() {
     text.textContent = e.text; // textContent avoids HTML injection from names
     const time = document.createElement('span');
     time.className = 'ev-time';
-    time.textContent = `Mes ${g.month}`;
+    time.textContent = `${g.day}/${g.month}`;
     li.appendChild(dot);
     li.appendChild(text);
     li.appendChild(time);
@@ -517,7 +522,7 @@ function applyTool(clientX, clientY) {
   const p = POWER_BY_ID[tool];
   if (!p || p.id === 'inspect') return;
   p.apply(world, x, y, selectedCiv);
-  if (['land', 'water', 'mountain', 'forest', 'meteor', 'hurricane', 'volcano'].includes(tool)) {
+  if (tool === 'hurricane') {
     renderer.markTerrainDirty();
   }
   renderer.draw();
@@ -600,9 +605,12 @@ const RULER_TITLE = { pnp: 'Gobernador', ppd: 'Gobernador', ind: 'Líder' };
 
 function inspectAt(clientX, clientY) {
   const { x, y } = renderer.screenToTile(clientX, clientY);
+  // Prefer a city when the tap lands right on its center (cities sit under a
+  // cluster of citizens, so without this you could never inspect the city).
+  const c = world.cityAtTile(x, y);
+  if (c && Math.hypot(c.x - x, c.y - y) <= 1.6) { selected = { kind: 'city', ref: c }; renderInspector(); return; }
   const u = world.unitAt(x, y);
   if (u) { selected = { kind: 'unit', ref: u }; renderInspector(); return; }
-  const c = world.cityAtTile(x, y);
   if (c) { selected = { kind: 'city', ref: c }; renderInspector(); return; }
   selected = null;
   $('inspector').classList.add('hidden');
@@ -617,7 +625,7 @@ function renderInspector() {
   const el = $('inspector');
   if (!selected) { el.classList.add('hidden'); return; }
   const body = $('inspBody');
-  const years = (ticks) => Math.floor(ticks / 12);
+  const years = (ticks) => Math.floor(ticks / 360);
 
   if (selected.kind === 'unit') {
     const u = selected.ref;
@@ -645,6 +653,7 @@ function renderInspector() {
       </div>
       ${status}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
+      <div class="irow"><span>Balance 💵</span><span>$${Math.round(u.balance || 0).toLocaleString('en-US')}</span></div>
       <div class="irow"><span>Movilidad</span><span>${mob}</span></div>
       ${joinedRow}
       ${reign}
@@ -656,6 +665,8 @@ function renderInspector() {
     const civ = owned ? world.civs[c.owner] : null;
     const accent = owned ? civ.color : '#9aa6b2';
     const alc = c.alcalde || '—';
+    const cap = c.capacity || 0;
+    const pct = cap ? Math.round((c.pop / cap) * 100) : 0;
     body.innerHTML = `
       <div class="ihead">
         <span class="iface" style="background:${accent}">🏛️</span>
@@ -665,8 +676,10 @@ function renderInspector() {
         </div>
       </div>
       <div class="irow"><span>Municipio</span><span>${c.muni || '—'}</span></div>
-      <div class="irow"><span>Habitantes</span><span>${Math.round(c.pop)}</span></div>
+      <div class="irow"><span>Ciudadanos</span><span>${Math.round(c.pop)} / ${cap} (${pct}%)</span></div>
+      <div class="ibar"><div style="width:${Math.min(100, pct)}%;background:${accent}"></div></div>
       <div class="irow"><span>Valor 💰</span><span>$${Math.round(c.worth || 0).toLocaleString('en-US')}</span></div>
+      <div class="irow dim"><span>Población real (2020)</span><span>${(c.realPop || 0).toLocaleString('en-US')}</span></div>
       <div class="irow"><span>Alcalde/sa</span><span>${alc}</span></div>
     `;
     body.querySelector('.iname').textContent = c.name;
@@ -739,7 +752,7 @@ $('resetBtn').addEventListener('click', () => {
 });
 $('speed').addEventListener('input', (e) => {
   speed = Number(e.target.value);
-  $('speedVal').textContent = speed + '× · ' + tps() + '/s';
+  $('speedVal').textContent = speed + '× · ' + tps() + ' días/s';
   localStorage.setItem(STORAGE.speed, String(speed));
 });
 
@@ -760,7 +773,7 @@ $('resetTraits').addEventListener('click', () => {
 
 // ---- Init ----------------------------------------------------------------
 $('speed').value = speed;
-$('speedVal').textContent = speed + '× · ' + tps() + '/s';
+$('speedVal').textContent = speed + '× · ' + tps() + ' días/s';
 buildWorld();
 buildToolUI();
 updatePlayBtn();

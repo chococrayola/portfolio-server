@@ -1,27 +1,26 @@
-/* powers.js — la caja de poderes divinos (en español).
+/* powers.js — poderes divinos con sabor de Puerto Rico.
  *
  * Cada poder define una herramienta del panel y un apply() que altera el mundo
- * en la casilla pulsada. Los marcados con needsCiv usan el partido elegido en
- * la interfaz (crear, bendecir). Los desastres llevan sabor boricua: el huracán
- * María, los terremotos de 2020 y los eternos apagones de LUMA.
+ * en la casilla pulsada. Se eliminaron los poderes de fantasía (dragón, OVNI,
+ * meteorito, volcán, tornado, rayo, plaga); ahora todo va con la historia real
+ * de Puerto Rico: huracanes, terremotos, apagones, éxodo, la Junta, fiestas
+ * patronales, inversión federal, plebiscito y la cosecha de café.
  */
-
-import { TILE } from './map.js?v=28';
 
 export const POWERS = [
   {
     id: 'inspect',
     label: 'Mirar',
     icon: '👆',
-    desc: 'Toca una persona 👑 o ciudad para ver sus datos. Arrastra para mover, pellizca/rueda para acercar.',
+    desc: 'Toca una persona 👑 o un pueblo para ver sus datos. Arrastra para mover, pellizca/rueda para acercar.',
     apply() {},
   },
   {
     id: 'spawn',
-    label: 'Crear',
+    label: 'Sembrar gente',
     icon: '👶',
     needsCiv: true,
-    desc: 'Suelta un nuevo seguidor del partido elegido.',
+    desc: 'Suelta nuevos seguidores del partido elegido.',
     apply(world, x, y, civIndex) {
       for (let i = 0; i < 3; i++) world.spawnUnit(civIndex, x, y);
     },
@@ -30,145 +29,92 @@ export const POWERS = [
     id: 'free',
     label: 'Librepensadores',
     icon: '🧠',
-    desc: 'Suelta gente indecisa que vagará y quizás se una a un partido.',
+    desc: 'Suelta gente indecisa que vagará y quizás se afilie a un partido.',
     apply(world, x, y) {
       for (let i = 0; i < 6; i++) world.spawnFree(x, y);
     },
   },
-  {
-    id: 'bless',
-    label: 'Bendecir',
-    icon: '✨',
-    needsCiv: true,
-    desc: 'Sana a un partido, hace crecer sus ciudades y mejora sus relaciones.',
-    apply(world, x, y, civIndex) {
-      world.blessCiv(civIndex);
-    },
-  },
+  // --- Desastres boricuas ---
   {
     id: 'hurricane',
     label: 'Huracán María',
     icon: '🌀',
-    desc: 'Un huracán monstruoso arrasa todo a su paso.',
+    desc: 'Un huracán monstruoso arrasa la región: víctimas y destrucción.',
     apply(world, x, y) {
       world.damageArea(x, y, 9, 22, '🌀 ¡El huracán María toca tierra!', true);
     },
   },
   {
     id: 'quake',
-    label: 'Terremoto',
+    label: 'Terremoto 2020',
     icon: '🌎',
-    desc: 'Un temblor agrieta la tierra (2020, no se olvida).',
+    desc: 'Un temblor agrieta el suroeste de la isla.',
     apply(world, x, y) {
       world.damageArea(x, y, 7, 18, '🌎 ¡Un terremoto sacude la isla!', false);
-    },
-  },
-  {
-    id: 'meteor',
-    label: 'Meteorito',
-    icon: '☄️',
-    desc: 'Un impacto de meteorito. Bíblico e indiscriminado.',
-    apply(world, x, y) {
-      world.damageArea(x, y, 6, 40, '☄️ ¡Un meteorito impacta Puerto Rico!', true);
-    },
-  },
-  {
-    id: 'plague',
-    label: 'Plaga',
-    icon: '🦠',
-    desc: 'Una enfermedad se propaga entre la población.',
-    apply(world, x, y) {
-      world.damageArea(x, y, 8, 12, '🦠 Una plaga se riega por los pueblos.', false);
-    },
-  },
-  {
-    id: 'lightning',
-    label: 'Rayo',
-    icon: '⚡',
-    desc: 'Un rayo certero desde los cielos.',
-    apply(world, x, y) {
-      world.damageArea(x, y, 2, 60, '⚡ ¡Cae un rayo!', false);
-    },
-  },
-  {
-    id: 'dragon',
-    label: 'Dragón',
-    icon: '🐉',
-    desc: 'Desata un dragón que escupe fuego sobre la zona.',
-    apply(world, x, y) {
-      world.spawnDragon(x, y);
-    },
-  },
-  {
-    id: 'ufo',
-    label: 'OVNI',
-    icon: '🛸',
-    desc: 'Un platillo volador que abduce a la gente.',
-    apply(world, x, y) {
-      world.spawnUfo(x, y);
-    },
-  },
-  {
-    id: 'volcano',
-    label: 'Volcán',
-    icon: '🌋',
-    desc: 'Levanta un volcán que entra en erupción con lava.',
-    apply(world, x, y) {
-      world.eruptVolcano(x, y);
-    },
-  },
-  {
-    id: 'tornado',
-    label: 'Tornado',
-    icon: '🌪️',
-    desc: 'Genera un tornado que deambula y lanza unidades.',
-    apply(world, x, y) {
-      world.spawnTornado(x, y);
     },
   },
   {
     id: 'blackout',
     label: 'Apagón (LUMA)',
     icon: '🔌',
-    desc: 'Corta la luz. Las ciudades dejan de crecer y se encogen.',
+    desc: 'Corta la luz: la economía de los pueblos cercanos se desploma.',
     apply(world, x, y) {
       world.blackout(x, y, 12);
     },
   },
   {
-    id: 'land',
-    label: 'Crear tierra',
-    icon: '🟫',
-    desc: 'Convierte el mar en pradera.',
+    id: 'exodus',
+    label: 'Éxodo',
+    icon: '✈️',
+    desc: 'La gente de la zona emigra a la diáspora y los pueblos se vacían.',
     apply(world, x, y) {
-      world.terraform(x, y, 2, TILE.GRASS);
+      world.exodus(x, y, 7);
     },
   },
   {
-    id: 'water',
-    label: 'Inundar',
-    icon: '🌊',
-    desc: 'Convierte la tierra en mar (ahoga unidades).',
+    id: 'junta',
+    label: 'La Junta (PROMESA)',
+    icon: '📉',
+    desc: 'Austeridad fiscal en toda la isla: se aprietan las arcas y los bolsillos.',
+    apply(world) {
+      world.junta();
+    },
+  },
+  // --- Bendiciones boricuas ---
+  {
+    id: 'fiestas',
+    label: 'Fiestas patronales',
+    icon: '🎉',
+    desc: 'Anima a un pueblo: sube su valor y la gente se entusiasma con el partido local.',
     apply(world, x, y) {
-      world.terraform(x, y, 2, TILE.OCEAN);
+      world.fiestas(x, y);
     },
   },
   {
-    id: 'mountain',
-    label: 'Montaña',
-    icon: '⛰️',
-    desc: 'Levanta montañas (gran terreno guerrillero).',
+    id: 'inversion',
+    label: 'Inversión federal',
+    icon: '💵',
+    desc: 'Inyecta fondos a un pueblo: sube su valor y el bolsillo de su gente.',
     apply(world, x, y) {
-      world.terraform(x, y, 1, TILE.MOUNTAIN);
+      world.inversion(x, y);
     },
   },
   {
-    id: 'forest',
-    label: 'Bosque',
-    icon: '🌳',
-    desc: 'Hace crecer un bosque.',
+    id: 'cosecha',
+    label: 'Cosecha de café',
+    icon: '☕',
+    desc: 'Una buena cosecha sube el valor económico del pueblo.',
     apply(world, x, y) {
-      world.terraform(x, y, 2, TILE.FOREST);
+      world.cosecha(x, y);
+    },
+  },
+  {
+    id: 'plebiscito',
+    label: 'Plebiscito',
+    icon: '🗳️',
+    desc: 'Un plebiscito de estatus: muchos indecisos toman partido de golpe.',
+    apply(world) {
+      world.plebiscito();
     },
   },
 ];

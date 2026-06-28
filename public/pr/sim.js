@@ -18,29 +18,32 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=28';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=28';
+} from './map.js?v=29';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=29';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=29';
 
-// --- Tunables -------------------------------------------------------------
-const MAX_CITIZENS = 2600;
-// 1 tick = 1 month; ages/lifespans are tracked in ticks (×12 = years).
-const MOVE_BASE = 0.55;      // base move propensity per tick
-const AFFIL_EVERY = 24;      // ticks between affiliation checks per citizen
-const BIRTH_EVERY = 90;      // ticks between birth checks per adult
-const BIRTH_RATE = 0.5;      // chance a birth check produces a child
-const MIGRATE_EVERY = 60;    // ticks between migration checks
-const OWNER_EVERY = 8;       // recompute city ownership cadence
-const ECON_EVERY = 10;       // recompute treasury cadence
-const DOMINANCE = 0.60;      // fraction of the 78 cities to win
+// --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
+const MAX_CITIZENS = 3000;
+const YEAR_DAYS = 360;
+const MOVE_BASE = 0.5;       // base move propensity per tick
+const AFFIL_EVERY = 60;      // days between affiliation checks per citizen
+const BIRTH_EVERY = 720;     // days between birth checks per adult (~2 yr)
+const BIRTH_RATE = 0.55;     // chance a birth check produces a child
+const MIGRATE_EVERY = 200;   // days between migration checks
+const OWNER_EVERY = 20;      // recompute city ownership cadence (days)
+const ECON_EVERY = 20;       // recompute economy cadence (days)
 const EVENT_CAP = 320;
-const SUMMARY_EVERY = 260;
-const SEED_FREE_PER_CITY = 10;
-const HOME_MEMBERS = 8;      // affiliated citizens seeded in each party's home city
+const SUMMARY_EVERY = 720;   // "estado de la isla" once a year-ish
+const SEED_FILL = 0.55;      // start cities at ~55% of capacity
+const HOME_MEMBERS_FRAC = 0.25; // fraction of a home city seeded as party members
 const WORTH_K = 70;          // city worth per resident citizen
 const OWNER_INF = 3.0;       // influence of a city's current owner
 const PRESENCE_INF = 0.22;   // influence per affiliated citizen present
 const NEIGHBOR_INF = 0.9;    // influence a neighboring owned city projects
 const JOIN_K = 0.05;         // affiliation probability scaler
+// Currency
+const BASE_WAGE = 16;        // personal income per econ tick at avg prosperity
+const LEADER_SALARY = 120;   // extra leader pay per econ tick (× budgetFactor)
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -140,11 +143,16 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (!ctr) continue;
       const spot = nearestLand(t.tiles, ctr[0], ctr[1]);
       const name = MUNI_NAMES[i];
+      // Capacity from the real 2020 census population (San Juan ≈ 214, Culebra ≈ 4).
+      const realPop = MUNI_POP[name] || 12000;
+      const capacity = Math.max(4, Math.round(realPop / PEOPLE_PER_CITIZEN));
       t.cities.push({
         id: t.cities.length + 1,
         x: spot.x, y: spot.y,
         muni: name, name,
         owner: -1,                 // neutral
+        capacity,                  // máx. ciudadanos (según población real)
+        realPop,                   // población real 2020 (referencia)
         base: cityBaseWorth(spot.x, spot.y),
         worth: 0,
         pop: 0,                    // total citizens homed here
@@ -172,13 +180,14 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       id: t.nextId++,
       x: spot.x, y: spot.y,
       party,                              // -1 = free-thinker
-      age: 0,                             // edad en ticks (1 tick = 1 mes)
-      maxAge: Math.round((60 + rng() * 45) * 12), // ~60–105 años; mueren cerca de 100
-      adultAt: Math.round((16 + rng() * 6) * 12), // mayoría de edad ~16–22 años
+      age: 0,                             // edad en días (1 tick = 1 día)
+      maxAge: Math.round((65 + rng() * 35) * YEAR_DAYS), // ~65–100 años
+      adultAt: Math.round((16 + rng() * 4) * YEAR_DAYS), // mayoría de edad ~16–20 años
       mobility: Math.pow(rng(), 1.4),     // many low, some high; a few ~never move
       openness: 0.45 + rng() * 0.55,
       committedFree: false,
       name: pickCitizen(),
+      balance: Math.round(200 + rng() * 1200), // dinero personal ($)
       homeCity: nearestCity(spot.x, spot.y),
       isLeader: false, isDeputy: false, rulerName: null, title: null,
       since: 0, joined: party >= 0 ? t.tick : null,
@@ -202,18 +211,19 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       while (homeOf[ci] >= 0 && guard++ < t.cities.length) ci = (ci + 7) % t.cities.length;
       homeOf[ci] = p;
     }
-    // Seed 10 free-thinkers on every city; home cities also get party members.
+    // Seed each city to ~55% of its (real-population-based) capacity with
+    // free-thinkers; a party's home city also gets a bloc of its members.
     for (let i = 0; i < t.cities.length; i++) {
       const city = t.cities[i];
-      for (let k = 0; k < SEED_FREE_PER_CITY; k++) {
+      const start = Math.max(3, Math.round(city.capacity * SEED_FILL));
+      const members = homeOf[i] >= 0 ? Math.round(start * HOME_MEMBERS_FRAC) : 0;
+      for (let k = 0; k < start - members; k++) {
         const c = makeCitizen(-1, city.x, city.y);
-        c.age = rng() * c.maxAge * 0.6; c.homeCity = i; addCitizen(c);
+        c.age = rng() * c.maxAge * 0.7; c.homeCity = i; addCitizen(c);
       }
-      if (homeOf[i] >= 0) {
-        for (let k = 0; k < HOME_MEMBERS; k++) {
-          const c = makeCitizen(homeOf[i], city.x, city.y);
-          c.age = c.adultAt + rng() * 200; c.homeCity = i; addCitizen(c);
-        }
+      for (let k = 0; k < members; k++) {
+        const c = makeCitizen(homeOf[i], city.x, city.y);
+        c.age = c.adultAt + rng() * 30 * YEAR_DAYS; c.homeCity = i; addCitizen(c);
       }
     }
     recomputeCityOwners(true);
@@ -227,7 +237,10 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     const slow = Math.max(0.08, 1 - (c.age / c.maxAge) * 0.9); // older → slower
     if ((t.tick + c.id) % MIGRATE_EVERY === 0 && rng() < c.mobility * 0.5) {
       const nbs = cityNeighbors[c.homeCity];
-      if (nbs && nbs.length) c.homeCity = nbs[(rng() * nbs.length) | 0]; // migrate, carrying affiliation
+      if (nbs && nbs.length) {
+        const target = nbs[(rng() * nbs.length) | 0]; // migrate, carrying affiliation
+        if (t.cities[target].pop < t.cities[target].capacity) c.homeCity = target; // sólo si hay cupo
+      }
     }
     if (rng() >= c.mobility * slow * MOVE_BASE) return;
     const home = t.cities[c.homeCity];
@@ -270,8 +283,10 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (c.party < 0 && !c.committedFree && c.age >= c.adultAt && (t.tick + c.id) % AFFIL_EVERY === 0) {
         tryAffiliate(c);
       }
+      const home = t.cities[c.homeCity];
       if (c.age >= c.adultAt && (t.tick + c.id) % BIRTH_EVERY === 0 &&
-          t.citizens.length + newborns.length < MAX_CITIZENS && rng() < BIRTH_RATE) {
+          t.citizens.length + newborns.length < MAX_CITIZENS &&
+          home && home.pop < home.capacity && rng() < BIRTH_RATE) {
         const baby = makeCitizen(-1, c.x, c.y); // children are born free-thinkers
         baby.homeCity = c.homeCity;
         newborns.push(baby);
@@ -309,16 +324,28 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
   }
 
-  // ---- Economy (currency from city worth) -------------------------------
+  // ---- Economy: city worth, party treasury, personal balances -----------
   function recomputeEconomy() {
     for (const city of t.cities) {
       city.worth = Math.round(city.base + city.pop * WORTH_K);
     }
+    // Party treasury (Presupuesto) = value of owned cities; drives campaigns.
     for (let p = 0; p < N; p++) {
       let sum = 0;
       for (const city of t.cities) if (city.owner === p) sum += city.worth;
       t.budget[p] = sum;
       t.budgetFactor[p] = sum > 0 ? 1 + Math.min(0.8, sum / 16000) : 0.5;
+    }
+    // Personal balances: everyone earns a wage scaled by their city's prosperity.
+    for (const c of t.citizens) {
+      const city = t.cities[c.homeCity];
+      const prosperity = city ? Math.max(0.4, Math.min(2.2, city.worth / 3500)) : 0.5;
+      c.balance = Math.min(50_000_000, (c.balance || 0) + Math.round(BASE_WAGE * prosperity));
+    }
+    // Leaders draw an extra salary from a well-funded party.
+    for (let p = 0; p < N; p++) {
+      const l = t.leaders[p];
+      if (l && !l.dead) l.balance = Math.min(50_000_000, (l.balance || 0) + Math.round(LEADER_SALARY * t.budgetFactor[p]));
     }
   }
 
@@ -623,8 +650,71 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
 
   world.blackout = function (cx, cy, r) {
     let hit = 0;
-    for (const city of t.cities) if (Math.hypot(city.x - cx, city.y - cy) <= r) { city.base = Math.max(150, city.base - 400); hit++; }
-    log(`🔌 ¡Apagón! LUMA deja ${hit} pueblo(s) a oscuras.`);
+    for (const city of t.cities) if (Math.hypot(city.x - cx, city.y - cy) <= r) { city.base = Math.max(150, city.base - 600); hit++; }
+    log(`🔌 ¡Apagón de LUMA! ${hit} pueblo(s) a oscuras: cae su economía.`);
+    recomputeEconomy();
+  };
+
+  // --- Poderes con sabor boricua ----------------------------------------
+  world.exodus = function (cx, cy, r) {
+    let gone = 0;
+    t.citizens = t.citizens.filter((c) => {
+      if (Math.hypot(c.x - cx, c.y - cy) <= r && rng() < 0.7) { c.dead = true; gone++; return false; }
+      return true;
+    });
+    log(`✈️ Éxodo: ${gone} boricuas se mudan a la diáspora.`);
+    recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
+  };
+
+  world.junta = function () {
+    for (const city of t.cities) city.base = Math.max(120, Math.round(city.base * 0.8));
+    for (const c of t.citizens) c.balance = Math.round((c.balance || 0) * 0.85);
+    log('📉 La Junta de Control Fiscal (PROMESA) impone austeridad en toda la isla.');
+    recomputeEconomy();
+  };
+
+  world.fiestas = function (cx, cy) {
+    const ci = nearestCity(cx, cy); const city = t.cities[ci];
+    if (!city) return;
+    city.base += 700; city.flash = 45;
+    if (city.owner >= 0) {
+      for (const c of t.citizens) if (c.homeCity === ci && c.party < 0 && !c.committedFree && rng() < 0.5) {
+        c.party = city.owner; c.joined = t.tick; t.recruited[city.owner]++;
+      }
+    }
+    log(`🎉 Fiestas patronales en ${city.name}: el pueblo se entusiasma.`, city.owner >= 0 ? city.owner : null);
+    recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
+  };
+
+  world.inversion = function (cx, cy) {
+    const ci = nearestCity(cx, cy); const city = t.cities[ci];
+    if (!city) return;
+    city.base += 2200; city.flash = 30;
+    for (const c of t.citizens) if (c.homeCity === ci) c.balance = (c.balance || 0) + 1500;
+    log(`💵 Inversión / fondos federales llegan a ${city.name}.`, city.owner >= 0 ? city.owner : null);
+    recomputeEconomy();
+  };
+
+  world.plebiscito = function () {
+    let moved = 0;
+    for (const c of t.citizens) {
+      if (c.party >= 0 || c.committedFree || c.age < c.adultAt) continue;
+      if (rng() < 0.4) {
+        const city = t.cities[c.homeCity];
+        const p = (city && city.owner >= 0) ? city.owner : (rng() * N) | 0;
+        c.party = p; c.joined = t.tick; t.recruited[p]++; moved++;
+      }
+    }
+    log(`🗳️ Plebiscito de estatus: ${moved} indecisos toman partido.`);
+    recomputeCityOwners(true); recomputeStats();
+  };
+
+  world.cosecha = function (cx, cy) {
+    const ci = nearestCity(cx, cy); const city = t.cities[ci];
+    if (!city) return;
+    city.base += 1000; city.flash = 30;
+    log(`☕ Buena cosecha de café en ${city.name}: sube su valor.`, city.owner >= 0 ? city.owner : null);
+    recomputeEconomy();
   };
 
   world.reset = function () { /* recreated externally */ };
