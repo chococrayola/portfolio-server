@@ -18,9 +18,9 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=30';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=30';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=30';
+} from './map.js?v=31';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=31';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=31';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -361,6 +361,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   }
 
   // ---- Economy: city worth, party treasury, personal balances -----------
+  // recomputeEconomy only recomputes *derived* values (city worth, party
+  // treasury, budget factor). It is idempotent and safe to call any number of
+  // times (e.g. from god-powers) without changing anyone's money.
   function recomputeEconomy() {
     for (const city of t.cities) {
       city.worth = Math.round(city.base + city.pop * WORTH_K);
@@ -372,6 +375,10 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       t.budget[p] = sum;
       t.budgetFactor[p] = sum > 0 ? 1 + Math.min(0.8, sum / 16000) : 0.5;
     }
+  }
+  // accrueIncome pays out wages/salaries. It MUST run on a single fixed cadence
+  // (once per ECON_EVERY) — never from powers — so balances grow steadily.
+  function accrueIncome() {
     // Personal balances: everyone earns a wage scaled by their city's prosperity.
     for (const c of t.citizens) {
       const city = t.cities[c.homeCity];
@@ -408,8 +415,19 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
     return best;
   }
+  // A leader should be experienced but not on death's door: pick the oldest
+  // member still under 85% of their lifespan, so leaders actually govern for a
+  // while (and the policy brain has time to adapt) instead of dying immediately.
+  function pickLeaderCandidate(party) {
+    let best = null;
+    for (const c of t.citizens) {
+      if (c.party !== party || c.dead || c.age >= c.maxAge * 0.85) continue;
+      if (!best || c.age > best.age) best = c;
+    }
+    return best || oldestMember(party, null); // fallback: whoever is left
+  }
   function promoteLeader(party, announce) {
-    const best = oldestMember(party, null);
+    const best = pickLeaderCandidate(party);
     t.leaders[party] = best;
     if (!best) return null;
     const c = t.civs[party];
@@ -719,10 +737,10 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       checkDeputy();
       checkWinner();
     }
-    if (t.tick % ECON_EVERY === 0) recomputeEconomy();
+    if (t.tick % ECON_EVERY === 0) { recomputeEconomy(); accrueIncome(); }
     // Una vez al mes los líderes piensan, mueven campañas y se registra la historia.
     if (t.tick % 30 === 0) {
-      recomputeEconomy();
+      recomputeEconomy(); // valores frescos para el cerebro (sin pagar sueldos)
       for (let p = 0; p < N; p++) runLeaderAI(p);
       decayCampaigns();
       sampleHistory();

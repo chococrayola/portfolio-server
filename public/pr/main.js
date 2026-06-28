@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=30';
-import { defaultCivs } from './civs.js?v=30';
-import { createWorld } from './sim.js?v=30';
-import { createRenderer } from './render.js?v=30';
-import { POWERS, POWER_BY_ID } from './powers.js?v=30';
-import { avatarDataURL } from './avatar.js?v=30';
+import { generateMap } from './map.js?v=31';
+import { defaultCivs } from './civs.js?v=31';
+import { createWorld } from './sim.js?v=31';
+import { createRenderer } from './render.js?v=31';
+import { POWERS, POWER_BY_ID } from './powers.js?v=31';
+import { avatarDataURL } from './avatar.js?v=31';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -670,7 +670,9 @@ function renderInspector() {
     const affil = free
       ? (u.committedFree ? 'Librepensador/a comprometido/a' : 'Librepensador/a (indeciso/a)')
       : ((u.isLeader ? (c.title || 'Líder') : (u.isDeputy ? 'Segundo al mando' : 'Afiliado/a')) + ' · ' + c.name);
-    const status = u.isLeader ? `<div class="istatus">${world.leaderStatus(u.party)}</div>` : '';
+    const status = u.dead
+      ? '<div class="istatus">⚰️ Ha fallecido</div>'
+      : (u.isLeader ? `<div class="istatus">${world.leaderStatus(u.party)}</div>` : '');
     const joinedRow = (!free && u.joined != null)
       ? `<div class="irow"><span>Afiliado/a desde</span><span>${formatDate(u.joined)}</span></div>` : '';
     const reign = u.isLeader
