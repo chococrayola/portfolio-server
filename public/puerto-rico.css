@@ -317,6 +317,21 @@ body {
   padding: 4px 7px;
   margin: 0 0 8px;
 }
+/* Política del líder */
+.policy { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.pstance { font-size: 0.78rem; font-weight: 800; color: #cdd6df; }
+.pbars { display: flex; gap: 3px; align-items: flex-end; }
+.pbar { position: relative; width: 12px; height: 26px; background: var(--panel-2); border-radius: 3px; display: inline-flex; align-items: flex-end; }
+.pbar-fill { width: 100%; background: var(--accent); border-radius: 3px; min-height: 1px; }
+.pbar em { position: absolute; left: 0; right: 0; bottom: -11px; text-align: center; font-style: normal; font-size: 0.52rem; color: var(--muted); }
+/* Trayectoria de un ciudadano + desarrollo de un pueblo (inspector) */
+.ilog { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.ilog-h, .idev-h { font-size: 0.72rem; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+.ilog ul { list-style: none; margin: 0; padding: 0; max-height: 120px; overflow-y: auto; }
+.ilog li { font-size: 0.74rem; padding: 2px 0; }
+.ilog .t { color: var(--accent); font-weight: 700; font-size: 0.66rem; margin-right: 4px; }
+.idev { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.idev canvas { width: 100%; height: auto; display: block; background: #0c141d; border-radius: 6px; margin-top: 4px; }
 .istatus {
   font-size: 0.82rem; font-weight: 700; color: var(--accent);
   background: var(--panel-2); border-radius: 7px; padding: 5px 8px; margin: 4px 0 8px;

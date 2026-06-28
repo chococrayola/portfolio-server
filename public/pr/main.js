@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=29';
-import { defaultCivs } from './civs.js?v=29';
-import { createWorld } from './sim.js?v=29';
-import { createRenderer } from './render.js?v=29';
-import { POWERS, POWER_BY_ID } from './powers.js?v=29';
-import { avatarDataURL } from './avatar.js?v=29';
+import { generateMap } from './map.js?v=30';
+import { defaultCivs } from './civs.js?v=30';
+import { createWorld } from './sim.js?v=30';
+import { createRenderer } from './render.js?v=30';
+import { POWERS, POWER_BY_ID } from './powers.js?v=30';
+import { avatarDataURL } from './avatar.js?v=30';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -194,6 +194,38 @@ function updatePlayBtn() {
   $('playBtn').textContent = running ? '⏸ Pausa' : '▶ Jugar';
 }
 
+// ---- Política del líder (cerebro de reglas) ------------------------------
+const POLICY_KEYS = [['expansion', 'Ex'], ['economy', 'Ec'], ['welfare', 'Bi'], ['campaign', 'Ca'], ['austerity', 'Au']];
+function policyHTML(i) {
+  const pol = world.policy ? world.policy[i] : null;
+  if (!pol) return '';
+  const stance = world.stance ? world.stance[i] : '—';
+  const bars = POLICY_KEYS.map(([k, lbl]) =>
+    `<span class="pbar" title="${k}: ${Math.round((pol[k] || 0) * 100)}%"><span class="pbar-fill" style="height:${Math.round((pol[k] || 0) * 100)}%"></span><em>${lbl}</em></span>`).join('');
+  return `<div class="policy"><span class="pstance">🧭 ${stance}</span><span class="pbars">${bars}</span></div>`;
+}
+
+// Mini sparkline para la trayectoria de un pueblo (población/valor en el tiempo).
+function drawSpark(id, hist, key, color, label) {
+  const cv = document.getElementById(id);
+  if (!cv) return;
+  const x = cv.getContext('2d'); const W = cv.width, H = cv.height;
+  x.clearRect(0, 0, W, H);
+  if (!hist || hist.length < 2) { x.fillStyle = '#5b6b7a'; x.font = '9px system-ui, sans-serif'; x.fillText('Recopilando…', 4, H / 2); return; }
+  let mn = Infinity, mx = -Infinity;
+  for (const s of hist) { const v = s[key]; if (v < mn) mn = v; if (v > mx) mx = v; }
+  const span = (mx - mn) || 1;
+  x.strokeStyle = color; x.lineWidth = 1.5; x.beginPath();
+  hist.forEach((s, k) => {
+    const px = (k / (hist.length - 1)) * (W - 4) + 2;
+    const py = H - 3 - ((s[key] - mn) / span) * (H - 12);
+    if (k) x.lineTo(px, py); else x.moveTo(px, py);
+  });
+  x.stroke();
+  x.fillStyle = '#8fa0b0'; x.font = '8px system-ui, sans-serif'; x.textAlign = 'left';
+  x.fillText(`${label} · máx ${mx >= 1000 ? (mx / 1000).toFixed(1) + 'k' : Math.round(mx)}`, 3, 9);
+}
+
 // ---- Dashboard (panel de estadísticas) -----------------------------------
 function renderStats() {
   const el = $('stats');
@@ -256,6 +288,7 @@ function renderStats() {
       </div>
       ${succNote}
       <div class="card-status">${world.leaderStatus(i)}</div>
+      ${policyHTML(i)}
       <div class="row"><span>Población</span><span>${s.pop}</span></div>
       <div class="row"><span>Ciudades</span><span>${s.cities}</span></div>
       <div class="row"><span>Territorio</span><span>${pct}%</span></div>
@@ -657,6 +690,7 @@ function renderInspector() {
       <div class="irow"><span>Movilidad</span><span>${mob}</span></div>
       ${joinedRow}
       ${reign}
+      ${(u.log && u.log.length) ? `<div class="ilog"><div class="ilog-h">Trayectoria</div><ul>${u.log.slice().reverse().map((e) => `<li><span class="t">${formatStamp(e.t)}</span> ${e.ev}</li>`).join('')}</ul></div>` : ''}
     `;
     body.querySelector('.iname').textContent = name;
   } else {
@@ -681,8 +715,16 @@ function renderInspector() {
       <div class="irow"><span>Valor 💰</span><span>$${Math.round(c.worth || 0).toLocaleString('en-US')}</span></div>
       <div class="irow dim"><span>Población real (2020)</span><span>${(c.realPop || 0).toLocaleString('en-US')}</span></div>
       <div class="irow"><span>Alcalde/sa</span><span>${alc}</span></div>
+      <div class="idev"><div class="idev-h">Desarrollo del pueblo</div>
+        <canvas id="ispPop" width="212" height="46"></canvas>
+        <canvas id="ispWorth" width="212" height="46"></canvas>
+      </div>
     `;
     body.querySelector('.iname').textContent = c.name;
+    const ci = world.cities.indexOf(c);
+    const hist = (world.cityHistory && ci >= 0) ? world.cityHistory[ci] : [];
+    drawSpark('ispPop', hist, 'pop', accent, 'Población');
+    drawSpark('ispWorth', hist, 'worth', '#f4b942', 'Valor');
   }
   el.classList.remove('hidden');
 }

@@ -18,9 +18,9 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
   municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=29';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=29';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=29';
+} from './map.js?v=30';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=30';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=30';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -56,6 +56,27 @@ function mulberry32(seed) {
   };
 }
 
+// ADN político inicial de cada partido, derivado de sus rasgos, con un refuerzo
+// de "firma" en su eje dominante para que los cinco líderes empiecen con
+// posturas distintas (Expansionista / Movilizador / Tecnócrata / Austero / Populista).
+function seedPolicy(civ) {
+  const tr = (civ && civ.traits) || {};
+  const n = (v, d) => (typeof v === 'number' ? v : d) / 10;
+  const pol = {
+    expansion: n(tr.expansion, 5),
+    economy: n(tr.intelligence, 5),
+    welfare: n(tr.diplomacy, 5),
+    campaign: n(tr.growth, 5),
+    austerity: n(tr.resilience, 4),
+  };
+  // Refuerza un eje de "firma" por partido para que los cinco arranquen con
+  // posturas distintas; luego runLeaderAI las adapta según el juego.
+  const SIG = { pnp: 'expansion', ppd: 'campaign', mvc: 'economy', ind: 'austerity', molina: 'welfare' };
+  const sig = SIG[civ && civ.id];
+  if (sig) pol[sig] = Math.min(1, Math.max(pol[sig], 0.55) + 0.25);
+  return pol;
+}
+
 export function createWorld({ tiles, civs, starts, seed = 1 }) {
   const rng = mulberry32(seed);
   const N = civs.length;
@@ -77,6 +98,11 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     recruited: civs.map(() => 0),      // cumulative affiliations gained
     budget: civs.map(() => 0),         // treasury = sum of owned city worth
     budgetFactor: civs.map(() => 1),   // campaign strength from money
+    policy: civs.map((c) => seedPolicy(c)),       // ADN político derivado de los rasgos
+    stance: civs.map(() => 'Tecnócrata'),         // etiqueta legible de la política del líder
+    cityHistory: [],                   // [cityId] = [{t,pop,worth,owner}]
+    leaderHistory: civs.map(() => []), // [p] = [{t,treasury,cities,balance,stance}]
+    aiPrevCities: civs.map(() => 0),
     deputyLog: civs.map(() => []),
     successionLog: civs.map(() => []),
     history: [],
@@ -157,6 +183,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         worth: 0,
         pop: 0,                    // total citizens homed here
         tally: new Array(N).fill(0),
+        campaign: new Array(N).fill(0), // empuje de campaña por partido (decae)
         free: 0,
         flash: 0,
         alcalde: null,
@@ -164,6 +191,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       });
     }
     t.landCount = t.cities.length;
+    t.cityHistory = t.cities.map(() => []);
     // nearest-neighbor table (for migration + influence spread)
     cityNeighbors = t.cities.map((c, i) => {
       const ds = t.cities.map((o, j) => ({ j, d: (o.x - c.x) ** 2 + (o.y - c.y) ** 2 }))
@@ -192,7 +220,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       isLeader: false, isDeputy: false, rulerName: null, title: null,
       since: 0, joined: party >= 0 ? t.tick : null,
       dead: false,
+      log: [{ t: t.tick, ev: party >= 0 ? 'Aparece afiliado/a' : 'Aparece (librepensador/a)' }],
     };
+  }
+  function clog(c, ev) {
+    if (!c.log) c.log = [];
+    c.log.push({ t: t.tick, ev });
+    if (c.log.length > 12) c.log.shift();
   }
   function addCitizen(c) { if (t.citizens.length < MAX_CITIZENS) { t.citizens.push(c); return c; } return null; }
 
@@ -256,6 +290,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     const inf = new Array(N).fill(0);
     if (city.owner >= 0) inf[city.owner] += OWNER_INF * t.budgetFactor[city.owner];
     for (let p = 0; p < N; p++) inf[p] += city.tally[p] * PRESENCE_INF * t.budgetFactor[p];
+    for (let p = 0; p < N; p++) inf[p] += (city.campaign[p] || 0); // empuje de campaña del líder
     for (const nb of cityNeighbors[c.homeCity]) {
       const o = t.cities[nb].owner;
       if (o >= 0) inf[o] += NEIGHBOR_INF * t.budgetFactor[o];
@@ -267,6 +302,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     const prob = Math.min(0.9, bestInf * c.openness * JOIN_K);
     if (rng() < prob) {
       c.party = best; c.joined = t.tick; t.recruited[best]++;
+      clog(c, `Se afilió a ${t.civs[best].name}`);
       if (rng() < 0.03) log(`🧠 ${c.name} se afilió a ${t.civs[best].name}.`, best);
     } else if (rng() < 0.01) {
       c.committedFree = true; // decides to stay independent for good
@@ -381,6 +417,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     best.rulerName = c.leader;
     best.title = c.title || 'Líder';
     best.since = t.tick;
+    if (best.balance == null) best.balance = 0;
+    clog(best, `Asume el liderazgo de ${c.name}`);
     if (announce) log(`👑 ${best.rulerName} encabeza a ${c.name}.`, party);
     return best;
   }
@@ -409,6 +447,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         if (dlog.length > 0 && dlog[dlog.length - 1].to === null) dlog[dlog.length - 1].to = t.tick;
         best.isDeputy = true;
         t.deputy[p] = best;
+        clog(best, `Nombrado/a segundo al mando de ${t.civs[p].name}`);
         dlog.push({ name: best.name, from: t.tick, to: null });
         if (dlog.length > 8) dlog.shift();
         log(`🎖️ ${best.name} es nombrado segundo al mando de ${t.civs[p].name}.`, p);
@@ -582,6 +621,89 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     }
   }
 
+  // ---- Leaders' policy brain (rule-based, adaptive) ---------------------
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const STANCE = {
+    expansion: 'Expansionista', economy: 'Tecnócrata', welfare: 'Populista',
+    campaign: 'Movilizador/a', austerity: 'Austero/a',
+  };
+  function deriveStance(pol) {
+    let bestK = 'economy', bestV = -1;
+    for (const k of Object.keys(pol)) if (pol[k] > bestV) { bestV = pol[k]; bestK = k; }
+    return STANCE[bestK] || 'Tecnócrata';
+  }
+  // Postura inicial coherente con el ADN sembrado (antes de que corra la IA).
+  for (let p = 0; p < N; p++) t.stance[p] = deriveStance(t.policy[p]);
+  // El vecino más disputado de un partido (limítrofe a una ciudad suya, lleno
+  // de convencibles): el mejor sitio para invertir una campaña.
+  function mostContestedNeighbor(p) {
+    let best = -1, bestScore = 0;
+    for (let i = 0; i < t.cities.length; i++) {
+      const c = t.cities[i];
+      if (c.owner === p) continue;
+      let adj = false;
+      for (const nb of cityNeighbors[i]) if (t.cities[nb].owner === p) { adj = true; break; }
+      if (!adj) continue;
+      let rivals = 0; for (let q = 0; q < N; q++) if (q !== p) rivals += c.tally[q];
+      const score = c.free * 1.5 + rivals + (c.owner < 0 ? 4 : 0);
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    return best;
+  }
+  function runLeaderAI(p) {
+    const lead = t.leaders[p];
+    if (!lead || lead.dead) return;
+    const pol = t.policy[p];
+    const myCities = [];
+    for (const c of t.cities) if (c.owner === p) myCities.push(c);
+    const treasury = t.budget[p];
+    const delta = myCities.length - t.aiPrevCities[p];
+    // Adaptación: si pierde pueblos, refuerza campaña/bienestar; si gana, expande.
+    if (delta < 0) { pol.campaign = clamp01(pol.campaign + 0.06); pol.welfare = clamp01(pol.welfare + 0.04); pol.austerity = clamp01(pol.austerity - 0.04); }
+    else if (delta > 0) { pol.expansion = clamp01(pol.expansion + 0.03); pol.economy = clamp01(pol.economy + 0.02); }
+    if (treasury < 1500) pol.austerity = clamp01(pol.austerity + 0.06);
+    else if (treasury > 12000) pol.austerity = clamp01(pol.austerity - 0.05);
+    for (const k of Object.keys(pol)) pol[k] = clamp01(pol[k] + (rng() - 0.5) * 0.02); // exploración
+    t.stance[p] = deriveStance(pol);
+    t.aiPrevCities[p] = myCities.length;
+
+    const willSpend = treasury * (1 - pol.austerity);
+    if (willSpend < 400) return; // en quiebra: no hay campañas
+    // 1) Campaña en el vecino más disputado.
+    if (pol.campaign > 0.4) {
+      const target = mostContestedNeighbor(p);
+      if (target >= 0) {
+        const push = Math.min(6, 1 + willSpend / 4000) * (0.6 + pol.campaign);
+        t.cities[target].campaign[p] += push;
+      }
+    }
+    // 2) Inversión en su pueblo más pobre.
+    if (pol.economy > 0.4 && myCities.length) {
+      let poor = myCities[0]; for (const c of myCities) if (c.base < poor.base) poor = c;
+      poor.base += Math.round(300 * pol.economy);
+    }
+    // 3) Bienestar/fiestas cuando hay holgura.
+    if (pol.welfare > 0.55 && treasury > 6000 && myCities.length) {
+      const c = myCities[(rng() * myCities.length) | 0];
+      c.base += 250; c.campaign[p] += 1.5; c.flash = 30;
+    }
+  }
+  function decayCampaigns() {
+    for (const c of t.cities) for (let p = 0; p < N; p++) if (c.campaign[p]) c.campaign[p] *= 0.8;
+  }
+  function sampleHistory() {
+    for (let i = 0; i < t.cities.length; i++) {
+      const c = t.cities[i]; const buf = t.cityHistory[i];
+      buf.push({ t: t.tick, pop: c.pop, worth: c.worth, owner: c.owner });
+      if (buf.length > 240) buf.shift();
+    }
+    for (let p = 0; p < N; p++) {
+      const l = t.leaders[p]; const buf = t.leaderHistory[p];
+      buf.push({ t: t.tick, treasury: t.budget[p], cities: t.stats[p].cities, balance: l ? Math.round(l.balance || 0) : 0, stance: t.stance[p] });
+      if (buf.length > 240) buf.shift();
+    }
+  }
+
   // ---- Main tick --------------------------------------------------------
   function step() {
     if (t.winner !== null) return;
@@ -598,6 +720,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       checkWinner();
     }
     if (t.tick % ECON_EVERY === 0) recomputeEconomy();
+    // Una vez al mes los líderes piensan, mueven campañas y se registra la historia.
+    if (t.tick % 30 === 0) {
+      recomputeEconomy();
+      for (let p = 0; p < N; p++) runLeaderAI(p);
+      decayCampaigns();
+      sampleHistory();
+    }
     if (t.tick % 120 === 0) {
       t.history.push({
         pop: t.stats.map((s) => s.pop),
