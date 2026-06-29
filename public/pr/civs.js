@@ -93,15 +93,6 @@ export const CIVS = [
 
 export const CIV_INDEX = Object.fromEntries(CIVS.map((c, i) => [c.id, i]));
 
-// Nombres de municipios para bautizar ciudades.
-export const CITY_NAMES = [
-  'Bayamón', 'Caguas', 'Ponce', 'Mayagüez', 'Arecibo', 'Guaynabo', 'Carolina',
-  'Humacao', 'Aguadilla', 'Fajardo', 'Cayey', 'Yauco', 'Utuado', 'Lares',
-  'Manatí', 'Cabo Rojo', 'Coamo', 'Guayama', 'Juncos', 'Vega Baja', 'Isabela',
-  'Camuy', 'Maricao', 'Adjuntas', 'Jayuya', 'Naranjito', 'Comerío', 'Patillas',
-  'Salinas', 'Loíza', 'Río Grande', 'Toa Alta', 'Aibonito', 'Barranquitas',
-];
-
 // Eventos satíricos aleatorios. {civ} se reemplaza por el nombre del partido.
 export const FLAVOR_EVENTS = [
   // PNP — estadistas de línea dura

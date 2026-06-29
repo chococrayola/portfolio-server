@@ -11,16 +11,16 @@
  * There is NO combat: no fighting, no war, no kills. Citizens die only of old
  * age (or by an act of god from the powers panel).
  *
- * render.js reads the public arrays (citizens, cities, animals, effects) and
- * powers.js calls the mutator hooks (spawnUnit/spawnFree/damageArea/…).
+ * render.js reads the public arrays (citizens, cities) and powers.js calls the
+ * mutator hooks (spawnUnit/spawnFree/damageArea/…).
  */
 
 import {
-  COLS, ROWS, TILE, idx, inBounds, isOcean, isLand,
-  municipioAt, MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=31';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=31';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=31';
+  COLS, ROWS, TILE, idx, inBounds, isLand,
+  MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
+} from './map.js?v=32';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=32';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=32';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -90,8 +90,6 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     tick: 0,
     citizens: [],
     cities: [],
-    animals: [],            // ambient wildlife (untouched by the redesign)
-    effects: [],            // transient god-power hazards
     stats: civs.map(() => ({ pop: 0, units: 0, cities: 0, territory: 0 })),
     leaders: civs.map(() => null),
     deputy: civs.map(() => null),
@@ -107,10 +105,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     successionLog: civs.map(() => []),
     history: [],
     freeCount: 0,
-    winner: null,
     landCount: 0,           // = number of cities (denominator for territory %)
     nextId: 1,
-    nextAnimalId: 1,
   };
   const t = world;
 
@@ -186,7 +182,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         campaign: new Array(N).fill(0), // empuje de campaña por partido (decae)
         free: 0,
         flash: 0,
-        alcalde: null,
+        alcalde: '—',       // nombre del/de la alcalde/sa (de alcaldeRef)
+        alcaldeRef: null,   // ciudadano/a real que ejerce de alcalde/sa
         alcaldeSince: 0,
       });
     }
@@ -217,7 +214,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       name: pickCitizen(),
       balance: Math.round(200 + rng() * 1200), // dinero personal ($)
       homeCity: nearestCity(spot.x, spot.y),
-      isLeader: false, isDeputy: false, rulerName: null, title: null,
+      isLeader: false, isDeputy: false, isAlcalde: false, alcaldeOf: null, rulerName: null, title: null,
       since: 0, joined: party >= 0 ? t.tick : null,
       dead: false,
       log: [{ t: t.tick, ev: party >= 0 ? 'Aparece afiliado/a' : 'Aparece (librepensador/a)' }],
@@ -347,15 +344,57 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (best !== city.owner) {
         const prev = city.owner;
         city.owner = best;
+        clearAlcalde(city); // el/la alcalde/sa anterior ya no representa al pueblo
         if (best >= 0) {
           city.flash = 45;
-          city.alcalde = pickCitizen();
-          city.alcaldeSince = t.tick;
           if (!silent) {
             if (prev < 0) log(`🏛️ ${t.civs[best].name} se establece en ${city.name}.`, best);
             else log(`🚩 ${t.civs[best].name} le gana ${city.name} a ${t.civs[prev].name}.`, best);
           }
         }
+      }
+    }
+    assignAlcaldes(silent);
+  }
+
+  // El/la alcalde/sa es un ciudadano/a REAL del partido dueño, residente del
+  // pueblo. Se mantiene mientras siga vivo/a, afiliado/a al dueño y viviendo
+  // allí; sólo se re-elige al morir, mudarse, cambiar de partido o cambiar el
+  // dueño del pueblo.
+  function clearAlcalde(city) {
+    if (city.alcaldeRef) { city.alcaldeRef.isAlcalde = false; city.alcaldeRef.alcaldeOf = null; }
+    city.alcaldeRef = null; city.alcalde = '—';
+  }
+  function assignAlcaldes(silent) {
+    const needSet = new Set();
+    for (let i = 0; i < t.cities.length; i++) {
+      const city = t.cities[i];
+      if (city.owner < 0) { if (city.alcaldeRef) clearAlcalde(city); continue; }
+      const a = city.alcaldeRef;
+      if (!(a && !a.dead && a.party === city.owner && a.homeCity === i)) needSet.add(i);
+    }
+    if (!needSet.size) return;
+    // Mejor candidato por pueblo: residente afiliado/a más veterano/a que no sea
+    // líder ni segundo al mando (un/a local de toda la vida).
+    const bestFor = new Map();
+    const fallback = new Map(); // permite líder/segundo si no hay nadie más
+    for (const c of t.citizens) {
+      if (c.party < 0 || c.dead || !needSet.has(c.homeCity)) continue;
+      if (c.party !== t.cities[c.homeCity].owner) continue;
+      const fb = fallback.get(c.homeCity);
+      if (!fb || c.age > fb.age) fallback.set(c.homeCity, c);
+      if (c.isLeader || c.isDeputy) continue;
+      const cur = bestFor.get(c.homeCity);
+      if (!cur || c.age > cur.age) bestFor.set(c.homeCity, c);
+    }
+    for (const i of needSet) {
+      const city = t.cities[i];
+      const pick = bestFor.get(i) || fallback.get(i) || null;
+      if (city.alcaldeRef && city.alcaldeRef !== pick) clearAlcalde(city);
+      if (pick) {
+        city.alcaldeRef = pick; city.alcalde = pick.name; city.alcaldeSince = t.tick;
+        pick.isAlcalde = true; pick.alcaldeOf = city.name;
+        if (!silent) clog(pick, `Nombrado/a alcalde/sa de ${city.name}`);
       }
     }
   }
@@ -522,123 +561,6 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     log(`📊 Estado de la Isla — ${shortName(lead)} al frente. ${parts.join(' · ')} · libres ${t.freeCount}.`, lead);
   }
 
-  // ---- Win check --------------------------------------------------------
-  // El juego es una caja de arena infinita: nunca hay ganador, nunca se detiene.
-  function checkWinner() { /* sin ganador: la isla evoluciona para siempre */ }
-
-  // ---- Animals (ambient, untouched) -------------------------------------
-  const ANIMAL = { SHEEP: 0, WOLF: 1, FISH: 2, BIRD: 3 };
-  const ANIMAL_CAP = [220, 36, 200, 44];
-  world.ANIMAL = ANIMAL;
-  function countAnimals(type) { let n = 0; for (const a of t.animals) if (a.type === type) n++; return n; }
-  function nearestWater(x, y) {
-    for (let r = 1; r < 24; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-      const nx = x + dx, ny = y + dy;
-      if (inBounds(nx, ny) && isOcean(t.tiles[idx(nx, ny)])) return { x: nx, y: ny };
-    }
-    return null;
-  }
-  function spawnAnimal(type, x, y) {
-    if (countAnimals(type) >= ANIMAL_CAP[type] || !inBounds(x, y)) return null;
-    const wantWater = type === ANIMAL.FISH;
-    const onWater = isOcean(t.tiles[idx(x, y)]);
-    if (type !== ANIMAL.BIRD && wantWater !== onWater) {
-      const spot = wantWater ? nearestWater(x, y) : nearestLandFree(x, y);
-      if (!spot) return null; x = spot.x; y = spot.y;
-    }
-    const a = { id: t.nextAnimalId++, type, x, y, food: 6, age: 0, maxAge: 500 + ((rng() * 400) | 0), hp: type === ANIMAL.WOLF ? 8 : 4 };
-    t.animals.push(a); return a;
-  }
-  world.spawnAnimal = spawnAnimal;
-  function seedAnimals() {
-    for (let i = 0; i < 80; i++) { const x = (rng() * COLS) | 0, y = (rng() * ROWS) | 0; if (isLand(t.tiles[idx(x, y)])) spawnAnimal(ANIMAL.SHEEP, x, y); }
-    for (let i = 0; i < 12; i++) { const x = (rng() * COLS) | 0, y = (rng() * ROWS) | 0; if (isLand(t.tiles[idx(x, y)])) spawnAnimal(ANIMAL.WOLF, x, y); }
-    for (let i = 0; i < 110; i++) { const x = (rng() * COLS) | 0, y = (rng() * ROWS) | 0; if (isOcean(t.tiles[idx(x, y)])) spawnAnimal(ANIMAL.FISH, x, y); }
-    for (let i = 0; i < 18; i++) spawnAnimal(ANIMAL.BIRD, (rng() * COLS) | 0, (rng() * ROWS) | 0);
-  }
-  function wanderStep(a, preferWater) {
-    const nx = a.x + ((rng() * 3) | 0) - 1, ny = a.y + ((rng() * 3) | 0) - 1;
-    if (!inBounds(nx, ny)) return;
-    const ocean = isOcean(t.tiles[idx(nx, ny)]);
-    if (a.type === ANIMAL.BIRD || ocean === preferWater) { a.x = nx; a.y = ny; }
-  }
-  function nearestSheep(a, r) {
-    let best = null, bd = r * r + 1;
-    for (const s of t.animals) { if (s.type !== ANIMAL.SHEEP || s.hp <= 0) continue; const d = (s.x - a.x) ** 2 + (s.y - a.y) ** 2; if (d < bd) { bd = d; best = s; } }
-    return best;
-  }
-  function updateAnimals() {
-    const dead = [];
-    for (let i = 0; i < t.animals.length; i++) {
-      const a = t.animals[i];
-      a.age++;
-      if (a.age > a.maxAge || a.hp <= 0) { dead.push(i); continue; }
-      if ((t.tick + a.id) % 2 === 0) {
-        if (a.type === ANIMAL.WOLF) {
-          const prey = nearestSheep(a, 6);
-          if (prey) { a.x += Math.sign(prey.x - a.x); a.y += Math.sign(prey.y - a.y); if (Math.abs(prey.x - a.x) <= 1 && Math.abs(prey.y - a.y) <= 1) { prey.hp = 0; a.food = Math.min(14, a.food + 6); } }
-          else wanderStep(a, false);
-        } else wanderStep(a, a.type === ANIMAL.FISH);
-      }
-      if ((t.tick + a.id) % 24 === 0) {
-        a.food -= 1;
-        if (a.food <= 0) { dead.push(i); continue; }
-        const breeds = (a.type === ANIMAL.SHEEP || a.type === ANIMAL.FISH) ? a.food > 4 && rng() < 0.25 : a.food > 9 && rng() < 0.2;
-        if (breeds) { a.food -= 3; spawnAnimal(a.type, a.x, a.y); }
-        if (a.type === ANIMAL.SHEEP && isLand(t.tiles[idx(a.x, a.y)])) a.food = Math.min(8, a.food + 2);
-      }
-    }
-    if (dead.length) { const set = new Set(dead); t.animals = t.animals.filter((_, i) => !set.has(i)); }
-  }
-  function cullAt(cx, cy, r) { if (t.animals.length) t.animals = t.animals.filter((a) => Math.hypot(a.x - cx, a.y - cy) > r); }
-  world._cullAnimals = cullAt;
-
-  // ---- Transient effects (god-power toys) -------------------------------
-  function addEffect(e) { t.effects.push(e); }
-  world.spawnDragon = function (x, y) { addEffect({ kind: 'dragon', x: 0, y: Math.max(0, y - 10), tx: x, ty: y, ttl: 150, t: 0 }); log('🐉 ¡Un dragón desciende sobre la isla!'); };
-  world.spawnUfo = function (x, y) { addEffect({ kind: 'ufo', x, y, ttl: 150, t: 0 }); log('🛸 ¡Aparece un OVNI y se lleva gente con su rayo!'); };
-  world.spawnTornado = function (x, y) { addEffect({ kind: 'tornado', x, y, vx: (rng() - 0.5) * 1.4, vy: (rng() - 0.5) * 1.4, ttl: 240, t: 0 }); log('🌪️ ¡Un tornado arrasa la tierra!'); };
-  world.eruptVolcano = function (x, y) { world.terraform(x, y, 1, TILE.MOUNTAIN); addEffect({ kind: 'volcano', x, y, ttl: 120, t: 0 }); log('🌋 ¡Un volcán entra en erupción y escupe lava!'); };
-
-  function killNear(cx, cy, r) {
-    // remove citizens within r (used by live effects / abduction)
-    const before = t.citizens.length;
-    t.citizens = t.citizens.filter((c) => { if (Math.hypot(c.x - cx, c.y - cy) <= r) { c.dead = true; return false; } return true; });
-    cullAt(cx, cy, r);
-    return before - t.citizens.length;
-  }
-  function abductNear(cx, cy, r) {
-    for (const c of t.citizens) { if (Math.hypot(c.x - cx, c.y - cy) <= r) { return killNear(c.x, c.y, 0.5) > 0; } }
-    for (let i = 0; i < t.animals.length; i++) { if (Math.hypot(t.animals[i].x - cx, t.animals[i].y - cy) <= r) { t.animals.splice(i, 1); return true; } }
-    return false;
-  }
-  function updateEffects() {
-    for (let i = t.effects.length - 1; i >= 0; i--) {
-      const e = t.effects[i]; e.t++; e.ttl--;
-      if (e.kind === 'dragon') {
-        const ang = e.t * 0.18;
-        e.x += (e.tx + Math.cos(ang) * 6 - e.x) * 0.12;
-        e.y += (e.ty + Math.sin(ang) * 6 - e.y) * 0.12;
-        if (e.t % 3 === 0) killNear(e.x, e.y, 2.4);
-      } else if (e.kind === 'ufo') {
-        e.x += Math.sin(e.t * 0.08) * 0.6;
-        if (e.t % 6 === 0) abductNear(e.x, e.y, 3);
-      } else if (e.kind === 'tornado') {
-        e.x += e.vx; e.y += e.vy;
-        if (e.x < 2 || e.x > COLS - 2) e.vx *= -1;
-        if (e.y < 2 || e.y > ROWS - 2) e.vy *= -1;
-        e.vx = Math.max(-1.6, Math.min(1.6, e.vx + (rng() - 0.5) * 0.3));
-        e.vy = Math.max(-1.6, Math.min(1.6, e.vy + (rng() - 0.5) * 0.3));
-        if (e.t % 2 === 0) killNear(e.x, e.y, 2.0);
-      } else if (e.kind === 'volcano') {
-        const r = Math.min(6, 1 + e.t * 0.05);
-        if (e.t % 4 === 0) killNear(e.x, e.y, r);
-      }
-      if (e.ttl <= 0) t.effects.splice(i, 1);
-    }
-  }
-
   // ---- Leaders' policy brain (rule-based, adaptive) ---------------------
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
   const STANCE = {
@@ -724,10 +646,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
 
   // ---- Main tick --------------------------------------------------------
   function step() {
-    if (t.winner !== null) return;
     t.tick++;
     updateCitizens();
-    updateEffects();
     checkSuccession();
     maybeFlavorEvent();
     for (const city of t.cities) if (city.flash > 0) city.flash--;
@@ -735,7 +655,6 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       recomputeCityOwners(false);
       recomputeStats();
       checkDeputy();
-      checkWinner();
     }
     if (t.tick % ECON_EVERY === 0) { recomputeEconomy(); accrueIncome(); }
     // Una vez al mes los líderes piensan, mueven campañas y se registra la historia.
@@ -754,7 +673,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       });
       if (t.history.length > 180) t.history.shift();
     }
-    if (t.tick % SUMMARY_EVERY === 0 && t.winner === null) summarize();
+    if (t.tick % SUMMARY_EVERY === 0) summarize();
   }
   world.step = step;
 
@@ -771,28 +690,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         if (inBounds(x, y) && Math.hypot(x - cx, y - cy) <= r * 0.5 && isLand(t.tiles[idx(x, y)]) && rng() < 0.3) t.tiles[idx(x, y)] = TILE.BEACH;
       }
     }
-    cullAt(cx, cy, r);
     if (label) log(label + (cas ? ` (${cas} víctimas)` : ''));
-    recomputeCityOwners(true); recomputeStats(); checkWinner();
-  };
-
-  world.terraform = function (cx, cy, r, tile) {
-    for (let y = (cy - r) | 0; y <= cy + r; y++) for (let x = (cx - r) | 0; x <= cx + r; x++) {
-      if (!inBounds(x, y) || Math.hypot(x - cx, y - cy) > r) continue;
-      t.tiles[idx(x, y)] = tile;
-    }
-    if (tile === TILE.OCEAN) {
-      t.citizens = t.citizens.filter((c) => { if (isOcean(t.tiles[idx(c.x, c.y)])) { c.dead = true; return false; } return true; });
-    }
-    recomputeCityOwners(true); recomputeStats();
-  };
-
-  world.blessCiv = function (p) {
-    for (const city of t.cities) if (city.owner === p) {
-      for (let k = 0; k < 2; k++) { const c = makeCitizen(p, city.x, city.y); c.age = c.adultAt + 10; c.homeCity = t.cities.indexOf(city); addCitizen(c); }
-      city.base += 300;
-    }
-    log(`✨ Una bendición fortalece a ${t.civs[p].name}.`, p);
+    recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
   };
 
   world.blackout = function (cx, cy, r) {

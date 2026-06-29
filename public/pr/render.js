@@ -2,7 +2,7 @@
  *
  * Draws the world in 2:1 isometric. The terrain is baked once into an offscreen
  * canvas as raised "slabs" (coastal cliffs, elevated hills/mountains/forest);
- * units, free-thinkers, animals, cities and live effects are drawn each frame
+ * citizens (free-thinkers + affiliated) and cities are drawn each frame
  * as little iso sprites, depth-sorted back-to-front. A smoothed camera (zoom +
  * pan) maps the iso world into the visible canvas, and screenToTile inverts the
  * projection so tap-to-inspect and god-powers land on the right tile.
@@ -12,8 +12,8 @@
  *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=31';
-import { MGRID, OCEAN_ID } from './municipios.js?v=31';
+import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=32';
+import { MGRID, OCEAN_ID } from './municipios.js?v=32';
 
 const NEUTRAL = '#9aa6b2'; // color for unclaimed cities / free-thinkers
 const ABBR_BY_NAME = {};
@@ -89,11 +89,6 @@ export function createRenderer(canvas, world) {
     const e = isLand(t) ? elevOf(t) : 0;
     return { sx: originX + isoX(x, y), sy: originY + isoY(x, y, e) };
   }
-  // Fractional version for effects (off-grid positions, at sea level + hover).
-  function anchorF(fx, fy, e = 0) {
-    return { sx: originX + (fx - fy) * HW, sy: originY + (fx + fy) * HH - e * EH };
-  }
-
   // ---- Camera (smoothed) ------------------------------------------------
   let zoom = 1, panX = 0, panY = 0;
   let zT = 1, pTx = 0, pTy = 0;
@@ -353,57 +348,6 @@ export function createRenderer(canvas, world) {
     ctx.fillText(label, sx, ly);
   }
 
-  function drawAnimal(a, sx, sy, detailed) {
-    if (a.type === 3) { ctx.fillStyle = '#1c1c1c'; ctx.fillRect(sx - 1, sy - TW * 0.6, 2, 1); return; } // bird
-    if (a.type === 2) { ctx.fillStyle = '#bfe9ff'; ctx.fillRect(sx - 1, sy, 2, 1); return; } // fish
-    if (!detailed) { drawDot(sx, sy, a.type === 1 ? '#5a5a5a' : '#f1f1ee', TW * 0.12); return; }
-    const s = TW * 0.4;
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.beginPath(); ctx.ellipse(sx, sy, s * 0.5, s * 0.22, 0, 0, 7); ctx.fill();
-    if (a.type === 1) { // wolf
-      ctx.fillStyle = '#555a5e';
-      ctx.fillRect(sx - s * 0.5, sy - s * 0.5, s, s * 0.5);
-    } else { // sheep
-      ctx.fillStyle = '#f2f2ee';
-      ctx.beginPath(); ctx.ellipse(sx, sy - s * 0.3, s * 0.5, s * 0.36, 0, 0, 7); ctx.fill();
-    }
-  }
-
-  function drawEffect(e) {
-    const a = anchorF(e.x, e.y, SLAB);
-    const sx = a.sx, sy = a.sy;
-    if (e.kind === 'dragon') {
-      const f = anchorF(e.tx, e.ty, SLAB);
-      ctx.fillStyle = 'rgba(255,140,0,0.85)';
-      ctx.beginPath(); ctx.arc(f.sx, f.sy, TW * 1.4, 0, 7); ctx.fill();
-      ctx.fillStyle = 'rgba(255,220,80,0.8)';
-      ctx.beginPath(); ctx.arc(f.sx, f.sy, TW * 0.7, 0, 7); ctx.fill();
-      const dy = sy - TW * 2.2;
-      ctx.fillStyle = '#a83246';
-      ctx.beginPath(); ctx.moveTo(sx - 3, dy); ctx.lineTo(sx - 13, dy - 7); ctx.lineTo(sx - 3, dy - 3); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(sx + 3, dy); ctx.lineTo(sx + 13, dy - 7); ctx.lineTo(sx + 3, dy - 3); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#7a1f2b'; ctx.fillRect(sx - 4, dy - 3, 9, 6);
-    } else if (e.kind === 'ufo') {
-      const dy = sy - TW * 2.6;
-      ctx.fillStyle = 'rgba(140,255,160,0.22)';
-      ctx.beginPath(); ctx.moveTo(sx - 2, dy); ctx.lineTo(sx + 2, dy); ctx.lineTo(sx + 8, sy); ctx.lineTo(sx - 8, sy); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#9aa6b2'; ctx.beginPath(); ctx.ellipse(sx, dy, TW * 1.5, TW * 0.6, 0, 0, 7); ctx.fill();
-      ctx.fillStyle = '#cfe8ff'; ctx.beginPath(); ctx.ellipse(sx, dy - TW * 0.35, TW * 0.65, TW * 0.45, 0, 0, 7); ctx.fill();
-    } else if (e.kind === 'tornado') {
-      ctx.fillStyle = 'rgba(90,90,90,0.7)';
-      const wob = Math.sin(e.t * 0.5) * 2;
-      ctx.beginPath();
-      ctx.moveTo(sx - TW * 1.4 + wob, sy - TW * 2.4);
-      ctx.lineTo(sx + TW * 1.4 + wob, sy - TW * 2.4);
-      ctx.lineTo(sx + 1, sy); ctx.lineTo(sx - 1, sy);
-      ctx.closePath(); ctx.fill();
-    } else if (e.kind === 'volcano') {
-      const r = Math.min(6, 1 + e.t * 0.05) * TW * 0.7;
-      ctx.fillStyle = 'rgba(255,90,0,0.5)'; ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.55, 0, 0, 7); ctx.fill();
-      ctx.fillStyle = 'rgba(255,200,40,0.85)'; ctx.beginPath(); ctx.ellipse(sx, sy, r * 0.45, r * 0.25, 0, 0, 7); ctx.fill();
-    }
-  }
-
   // ---- Frame ------------------------------------------------------------
   function draw() {
     if (terrainDirty) { bakeTerrain(); terrainDirty = false; }
@@ -423,7 +367,6 @@ export function createRenderer(canvas, world) {
     const detailed = zoom >= 0.9;
     // Collect ground entities and depth-sort (back → front).
     const ents = [];
-    for (const a of world.animals) ents.push({ d: a.x + a.y - 0.05, k: 1, o: a });
     for (const c of world.citizens) ents.push({ d: c.x + c.y + (c.isLeader ? 0.35 : 0.1), k: 2, o: c });
     for (const c of world.cities) ents.push({ d: c.x + c.y + 0.25, k: 3, o: c });
     ents.sort((p, q) => p.d - q.d);
@@ -431,9 +374,7 @@ export function createRenderer(canvas, world) {
     for (const e of ents) {
       const o = e.o;
       const ax = anchor(o.x, o.y);
-      if (e.k === 1) { // animal
-        drawAnimal(o, ax.sx, ax.sy, detailed);
-      } else if (e.k === 2) { // citizen (free-thinker or affiliated)
+      if (e.k === 2) { // citizen (free-thinker or affiliated)
         const free = o.party < 0;
         const civ = free ? null : world.civs[o.party];
         const color = free ? NEUTRAL : civ.color;
@@ -457,8 +398,6 @@ export function createRenderer(canvas, world) {
         drawCityLabel(city, ax.sx, ax.sy);
       }
     }
-
-    for (const e of world.effects) drawEffect(e);
   }
 
   function markTerrainDirty() { terrainDirty = true; }

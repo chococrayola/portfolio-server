@@ -7,7 +7,7 @@
  * San Juan metro, and coastal beaches) painted on top of the real coastline.
  */
 
-import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js?v=31';
+import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js?v=32';
 
 export const COLS = MCOLS;
 export const ROWS = MROWS;
@@ -33,44 +33,12 @@ export const TILE_COLOR = {
   [TILE.URBAN]: '#b3b9bf',
 };
 
-// --- Terrain gameplay modifiers ------------------------------------------
-export const MOVE_COST = {
-  [TILE.OCEAN]: 2.6, // navegable (en bote) — lento pero cruzable
-  [TILE.BEACH]: 1.0,
-  [TILE.GRASS]: 1.0,
-  [TILE.HILL]: 1.6,
-  [TILE.MOUNTAIN]: 2.6,
-  [TILE.FOREST]: 1.8,
-  [TILE.URBAN]: 0.9,
-};
-
-export const GROWTH_MOD = {
-  [TILE.OCEAN]: 0,
-  [TILE.BEACH]: 1.0,
-  [TILE.GRASS]: 1.2,
-  [TILE.HILL]: 0.8,
-  [TILE.MOUNTAIN]: 0.4,
-  [TILE.FOREST]: 0.7,
-  [TILE.URBAN]: 1.5,
-};
-
-export const DEFENSE_MOD = {
-  [TILE.OCEAN]: 1,
-  [TILE.BEACH]: 0.9,
-  [TILE.GRASS]: 1.0,
-  [TILE.HILL]: 1.3,
-  [TILE.MOUNTAIN]: 1.8,
-  [TILE.FOREST]: 1.5,
-  [TILE.URBAN]: 1.2,
-};
-
 export const idx = (x, y) => y * COLS + x;
 export const inBounds = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
 export const isOcean = (t) => t === TILE.OCEAN;
 export const isLand = (t) => t !== TILE.OCEAN;
 export const isBuildable = (t) =>
   t === TILE.GRASS || t === TILE.BEACH || t === TILE.HILL || t === TILE.URBAN;
-export const isRough = (t) => t === TILE.MOUNTAIN || t === TILE.FOREST;
 
 // Deterministic value-noise so a given seed yields the same terrain.
 function makeNoise(seed) {
@@ -192,9 +160,4 @@ export function nearestLand(tiles, x, y) {
   return { x, y };
 }
 
-// Look up which municipio a tile belongs to (255 = ocean).
-export function municipioAt(x, y) {
-  if (!inBounds(x, y)) return OCEAN_ID;
-  return MGRID[idx(x, y)];
-}
 export { NAMES as MUNI_NAMES, ABBR as MUNI_ABBR, CENTROIDS as MUNI_CENTROIDS, OCEAN_ID };

@@ -479,6 +479,8 @@ body {
 .idead { color: #ff9b9b; font-size: 0.8rem; margin: 2px 0 6px; font-weight: 700; }
 .irow { display: flex; justify-content: space-between; font-size: 0.82rem; margin: 3px 0; }
 .irow span:last-child { font-weight: 700; }
+.al-link { font: inherit; font-weight: 700; color: var(--accent); background: none; border: none;
+  padding: 0; cursor: pointer; text-decoration: underline dotted; }
 .ibar { height: 8px; border-radius: 5px; background: var(--panel-2); overflow: hidden; margin: 2px 0 6px; }
 .ibar > div { height: 100%; }
 .civ-card .ruler { font-size: 0.78rem; font-weight: 700; margin: 0 0 8px; }

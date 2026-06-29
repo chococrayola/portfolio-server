@@ -1,16 +1,16 @@
 /* main.js — wires the DOM to the simulation.
  *
  * Owns the game loop (play/pause + speed), the god-power toolbox, the live
- * stats/event panels, the win banner, and the trait editor (persisted to
+ * stats/event panels, the inspector, and the trait editor (persisted to
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=31';
-import { defaultCivs } from './civs.js?v=31';
-import { createWorld } from './sim.js?v=31';
-import { createRenderer } from './render.js?v=31';
-import { POWERS, POWER_BY_ID } from './powers.js?v=31';
-import { avatarDataURL } from './avatar.js?v=31';
+import { generateMap } from './map.js?v=32';
+import { defaultCivs } from './civs.js?v=32';
+import { createWorld } from './sim.js?v=32';
+import { createRenderer } from './render.js?v=32';
+import { POWERS, POWER_BY_ID } from './powers.js?v=32';
+import { avatarDataURL } from './avatar.js?v=32';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -74,7 +74,6 @@ function buildWorld() {
   updateClock();
   updateTicker();
   updatePartyStrip();
-  $('winBanner').classList.add('hidden');
   $('tickVal').textContent = '0';
 }
 
@@ -89,20 +88,15 @@ let lastTime = performance.now();
 function loop(now) {
   const dt = Math.min(0.25, (now - lastTime) / 1000); // clamp big gaps
   lastTime = now;
-  if (running && world.winner === null) {
+  if (running) {
     tickAcc += dt * tps();
     let budget = Math.min(tickAcc | 0, 120); // cap catch-up per frame
     tickAcc -= budget;
-    while (budget-- > 0 && world.winner === null) world.step();
+    while (budget-- > 0) world.step();
   }
   renderer.draw();
   $('tickVal').textContent = world.tick;
   updateClock();
-  if (world.winner !== null && running) {
-    running = false;
-    updatePlayBtn();
-    showWin();
-  }
   requestAnimationFrame(loop);
 }
 
@@ -117,7 +111,6 @@ function gameTime(ticks) {
   const year = Math.floor(ticks / YEAR_DAYS) + BASE_YEAR;
   return { day, month, year };
 }
-const yearsOf = (ticks) => Math.floor(ticks / YEAR_DAYS); // ticks(días) → años
 function formatClock(ticks) {
   const t = gameTime(ticks);
   return `📅 ${t.day}/${t.month}/${t.year}`;
@@ -176,18 +169,22 @@ function updatePartyStrip() {
 }
 
 // HUD panels refresh on a gentler cadence than the render loop.
+let lastHudTick = -1;
 setInterval(() => {
-  if (world) {
-    renderStats();
-    // Only rebuild the history list when the reader is at the top; otherwise
-    // the periodic rebuild would yank the scroll position back up.
-    const lg = $('eventLog');
-    if (!lg || lg.scrollTop <= 6) renderLog();
-    renderCharts();
-    updateTicker();
-    updatePartyStrip();
-    if (selected) renderInspector();
-  }
+  if (!world) return;
+  // Idle guard: while paused with no new tick, nothing in the HUD changed, so
+  // skip the heavy rebuilds (cards/charts/inspector) — saves CPU + battery.
+  if (!running && world.tick === lastHudTick) return;
+  lastHudTick = world.tick;
+  renderStats();
+  // Only rebuild the history list when the reader is at the top; otherwise
+  // the periodic rebuild would yank the scroll position back up.
+  const lg = $('eventLog');
+  if (!lg || lg.scrollTop <= 6) renderLog();
+  renderCharts();
+  updateTicker();
+  updatePartyStrip();
+  if (selected) renderInspector();
 }, 350);
 
 function updatePlayBtn() {
@@ -226,16 +223,19 @@ function drawSpark(id, hist, key, color, label) {
   x.fillText(`${label} · máx ${mx >= 1000 ? (mx / 1000).toFixed(1) + 'k' : Math.round(mx)}`, 3, 9);
 }
 
+// Avatares de líder son constantes por partido (nombre + color fijos): se
+// generan una sola vez y se reutilizan en cada rebuild de las tarjetas.
+const avatarCache = new Map();
+function cachedAvatar(key, name, color, opts) {
+  let u = avatarCache.get(key);
+  if (u === undefined) { u = avatarDataURL(name, color, opts); avatarCache.set(key, u); }
+  return u;
+}
+
 // ---- Dashboard (panel de estadísticas) -----------------------------------
 function renderStats() {
   const el = $('stats');
   const land = world.landCount || 1;
-  // Preserve any open alcalde-list scroll positions across the rebuild.
-  const prevScroll = {};
-  el.querySelectorAll('.civ-card').forEach((card) => {
-    const ul = card.querySelector('.hr-alc');
-    if (ul) prevScroll[card.dataset.civ] = ul.scrollTop;
-  });
   el.innerHTML = '';
   const money = (b) => '$' + Math.round(b).toLocaleString('en-US');
 
@@ -246,7 +246,7 @@ function renderStats() {
     const budget = world.budget ? world.budget[i] : 0;
     const dead = s.units === 0 && s.cities === 0;
     const lead = world.leaders[i];
-    const av = avatarDataURL(c.leader, c.color, { crown: true, size: 44 });
+    const av = cachedAvatar('lead' + i, c.leader, c.color, { crown: true, size: 44 });
     const slog = world.successionLog ? world.successionLog[i] : [];
     const succNote = slog.length > 0
       ? `<div class="succ-note">⚰️ Nueva toma: ${formatStamp(slog[slog.length - 1].tick)}</div>`
@@ -307,8 +307,6 @@ function renderStats() {
     `;
     card.dataset.civ = i;
     card.querySelector('.ruler span').textContent = lead ? lead.rulerName : '—';
-    const ul = card.querySelector('.hr-alc');
-    if (ul && prevScroll[i] != null) ul.scrollTop = prevScroll[i];
     el.appendChild(card);
   });
 }
@@ -342,14 +340,17 @@ const CHART_DEFS = [
   { id: 'c12', title: 'Reparto de ciudades', kind: 'donut', get: () => world.stats.map((s) => s.cities) },
   { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 360) : 0)) },
   { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => citizenBuckets((c) => c.age) },
-  { id: 'c15', title: 'Antigüedad afiliada', kind: 'hist', get: () => citizenBuckets((c) => (c.party >= 0 && c.joined != null) ? (world.tick - c.joined) : 0) },
+  { id: 'c15', title: 'Antigüedad afiliada', kind: 'hist', get: () => citizenBuckets((c) => world.tick - c.joined, 10, (c) => c.party >= 0 && c.joined != null) },
 ];
 
-function citizenBuckets(fn, B = 10) {
+// Histograma sobre los ciudadanos. `pred` (opcional) filtra quién cuenta — p.ej.
+// la antigüedad afiliada sólo considera a los afiliados, no a los indecisos.
+function citizenBuckets(fn, B = 10, pred = null) {
+  const arr = pred ? world.citizens.filter(pred) : world.citizens;
   const buckets = new Array(B).fill(0);
   let max = 1;
-  for (const c of world.citizens) { const v = fn(c); if (v > max) max = v; }
-  for (const c of world.citizens) buckets[Math.min(B - 1, Math.floor((fn(c) / (max + 1)) * B))]++;
+  for (const c of arr) { const v = fn(c); if (v > max) max = v; }
+  for (const c of arr) buckets[Math.min(B - 1, Math.floor((fn(c) / (max + 1)) * B))]++;
   return { buckets, max };
 }
 
@@ -502,15 +503,6 @@ function renderLog() {
   }
 }
 
-function showWin() {
-  const w = world.winner;
-  const c = world.civs[w];
-  const banner = $('winBanner');
-  banner.innerHTML = `<div style="color:${c.color}">👑 ¡${c.name} gobiernan Puerto Rico!</div>` +
-    `<small>"${c.motto}"</small>`;
-  banner.classList.remove('hidden');
-}
-
 // ---- Toolbox (poder + partido en menús desplegables) ---------------------
 function buildToolUI() {
   const ps = $('powerSelect');
@@ -634,7 +626,6 @@ $('zoomFit').addEventListener('click', () => renderer.fit());
 
 // ---- Inspector (tap a character/city with the Look tool) -----------------
 let selected = null; // { kind: 'unit'|'city', ref }
-const RULER_TITLE = { pnp: 'Gobernador', ppd: 'Gobernador', ind: 'Líder' };
 
 function inspectAt(clientX, clientY) {
   const { x, y } = renderer.screenToTile(clientX, clientY);
@@ -667,9 +658,13 @@ function renderInspector() {
     const accent = free ? '#9aa6b2' : c.color;
     const name = u.isLeader ? u.rulerName : u.name;
     const av = avatarDataURL(u.isLeader ? (c ? c.leader : name) : (u.name + u.id), accent, { crown: u.isLeader, size: 52 });
+    const role = u.isLeader ? (c.title || 'Líder')
+      : u.isDeputy ? 'Segundo al mando'
+      : u.isAlcalde ? `Alcalde/sa${u.alcaldeOf ? ' de ' + u.alcaldeOf : ''}`
+      : 'Afiliado/a';
     const affil = free
       ? (u.committedFree ? 'Librepensador/a comprometido/a' : 'Librepensador/a (indeciso/a)')
-      : ((u.isLeader ? (c.title || 'Líder') : (u.isDeputy ? 'Segundo al mando' : 'Afiliado/a')) + ' · ' + c.name);
+      : (role + ' · ' + c.name);
     const status = u.dead
       ? '<div class="istatus">⚰️ Ha fallecido</div>'
       : (u.isLeader ? `<div class="istatus">${world.leaderStatus(u.party)}</div>` : '');
@@ -700,7 +695,10 @@ function renderInspector() {
     const owned = c.owner >= 0;
     const civ = owned ? world.civs[c.owner] : null;
     const accent = owned ? civ.color : '#9aa6b2';
-    const alc = c.alcalde || '—';
+    const alcRef = (c.alcaldeRef && !c.alcaldeRef.dead) ? c.alcaldeRef : null;
+    const alc = alcRef
+      ? `<button class="al-link" data-alc="1">${alcRef.name} 👤</button>`
+      : (c.alcalde || '—');
     const cap = c.capacity || 0;
     const pct = cap ? Math.round((c.pop / cap) * 100) : 0;
     body.innerHTML = `
@@ -732,6 +730,15 @@ function renderInspector() {
 }
 
 $('inspClose').addEventListener('click', () => { selected = null; $('inspector').classList.add('hidden'); });
+
+// Tapping a city's alcalde/sa opens that real citizen's card.
+$('inspBody').addEventListener('click', (e) => {
+  if (!e.target.closest('.al-link')) return;
+  if (selected && selected.kind === 'city' && selected.ref.alcaldeRef) {
+    selected = { kind: 'unit', ref: selected.ref.alcaldeRef };
+    renderInspector();
+  }
+});
 
 // ---- Trait editor --------------------------------------------------------
 function renderTraitEditor() {
@@ -774,12 +781,11 @@ function renderTraitEditor() {
 
 // ---- Wire up controls ----------------------------------------------------
 $('playBtn').addEventListener('click', () => {
-  if (world.winner !== null) return;
   running = !running;
   updatePlayBtn();
 });
 $('stepBtn').addEventListener('click', () => {
-  if (world.winner === null) world.step();
+  world.step();
   renderer.draw();
   $('tickVal').textContent = world.tick;
   renderStats();
