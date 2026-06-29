@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=35';
-import { defaultCivs } from './civs.js?v=35';
-import { createWorld } from './sim.js?v=35';
-import { createRenderer } from './render.js?v=35';
-import { POWERS, POWER_BY_ID } from './powers.js?v=35';
-import { avatarDataURL } from './avatar.js?v=35';
+import { generateMap } from './map.js?v=36';
+import { defaultCivs } from './civs.js?v=36';
+import { createWorld } from './sim.js?v=36';
+import { createRenderer } from './render.js?v=36';
+import { POWERS, POWER_BY_ID } from './powers.js?v=36';
+import { avatarDataURL } from './avatar.js?v=36';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -729,6 +729,7 @@ function renderInspector() {
         </div>
       </div>
       ${status}
+      ${u.profession ? `<div class="irow"><span>Profesión</span><span>${u.profession}</span></div>` : ''}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
       <div class="irow"><span>Balance 💵</span><span>$${Math.round(u.balance || 0).toLocaleString('en-US')}</span></div>
       <div class="irow"><span>Movilidad</span><span>${mob}</span></div>

@@ -18,9 +18,9 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=35';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=35';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=35';
+} from './map.js?v=36';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=36';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=36';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -156,6 +156,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     return Math.round((500 + rng() * 700) * m);
   }
   function pickCitizen() { return CITIZEN_NAMES[(rng() * CITIZEN_NAMES.length) | 0]; }
+  function pickProfession() { return PROFESSIONS[(rng() * PROFESSIONS.length) | 0]; }
 
   let cityNeighbors = []; // indices of the few nearest cities, per city
 
@@ -212,6 +213,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       openness: 0.45 + rng() * 0.55,
       committedFree: false,
       name: pickCitizen(),
+      profession: pickProfession(),         // oficio al azar (ambientación)
       balance: Math.round(200 + rng() * 1200), // dinero personal ($)
       homeCity: nearestCity(spot.x, spot.y),
       isLeader: false, isDeputy: false, isAlcalde: false, alcaldeOf: null, rulerName: null, title: null,

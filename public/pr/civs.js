@@ -164,6 +164,22 @@ export const CITIZEN_NAMES = [
   'Nydia Velázquez', 'Sonia Sotomayor', 'Rosario Ferré', 'Tony Croatto',
 ];
 
+// Oficios cotidianos (con sabor boricua) que se asignan al azar a cada
+// ciudadano/a — pura ambientación para su ficha.
+export const PROFESSIONS = [
+  '☕ Cafetalero/a', '🍌 Agricultor/a', '🎣 Pescador/a', '🧑‍🏫 Maestro/a',
+  '👩‍⚕️ Enfermero/a', '🩺 Médico/a', '🚒 Bombero/a', '👮 Policía',
+  '⚖️ Abogado/a', '🧑‍🔧 Mecánico/a', '🔨 Carpintero/a', '🧱 Albañil',
+  '🎸 Músico/a', '🎨 Artista', '🚕 Taxista', '🛒 Comerciante',
+  '🧑‍💻 Programador/a', '⚡ Electricista', '🔧 Plomero/a', '💈 Barbero/a',
+  '💇 Estilista', '🧺 Costurero/a', '💊 Farmacéutico/a', '🦷 Dentista',
+  '🐄 Veterinario/a', '✈️ Piloto', '⛵ Marinero/a', '🍞 Panadero/a',
+  '👨‍🍳 Chef', '📰 Periodista', '🔬 Científico/a', '⚾ Pelotero/a',
+  '🌱 Jardinero/a', '🧂 Salinero/a', '🧑‍🎨 Artesano/a', '🍧 Piragüero/a',
+  '🚌 Chofer de guagua', '🏗️ Ingeniero/a', '📚 Bibliotecario/a', '🧹 Conserje',
+  '🐔 Avicultor/a', '🛵 Mensajero/a', '🧑‍🚒 Rescatista', '💼 Contable',
+];
+
 export function defaultCivs() {
   return CIVS.map((c) => ({
     ...c,
