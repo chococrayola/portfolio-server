@@ -308,6 +308,35 @@ body {
 .hr-alc .al-worth { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
 .hr-alc .al-more { display: block; grid-template-columns: none; color: var(--muted); font-style: italic;
   font-size: 0.76rem; padding-top: 5px; border-bottom: none; }
+
+/* Panel dedicado de alcaldes: TODOS los pueblos con dueño, con sus datos. */
+.alcaldes-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 460px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px;
+}
+.alc-empty { color: var(--muted); font-size: 0.85rem; padding: 10px 4px; grid-column: 1 / -1; }
+.alc-row {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.alc-row:hover { background: #16222e; }
+.alc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.alc-city { font-weight: 800; font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alc-party { font-weight: 700; font-size: 0.72rem; white-space: nowrap; }
+.alc-name { color: var(--ink); font-size: 0.8rem; margin: 2px 0 4px; }
+.alc-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.72rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.alc-stats span { white-space: nowrap; }
 .card-status {
   font-size: 0.74rem;
   font-weight: 700;

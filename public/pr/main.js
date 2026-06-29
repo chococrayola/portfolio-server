@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=34';
-import { defaultCivs } from './civs.js?v=34';
-import { createWorld } from './sim.js?v=34';
-import { createRenderer } from './render.js?v=34';
-import { POWERS, POWER_BY_ID } from './powers.js?v=34';
-import { avatarDataURL } from './avatar.js?v=34';
+import { generateMap } from './map.js?v=35';
+import { defaultCivs } from './civs.js?v=35';
+import { createWorld } from './sim.js?v=35';
+import { createRenderer } from './render.js?v=35';
+import { POWERS, POWER_BY_ID } from './powers.js?v=35';
+import { avatarDataURL } from './avatar.js?v=35';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -69,6 +69,7 @@ function buildWorld() {
   renderer.draw();
   buildCharts();
   renderStats();
+  renderAlcaldes();
   renderLog();
   renderCharts();
   updateClock();
@@ -177,6 +178,7 @@ setInterval(() => {
   if (!running && world.tick === lastHudTick) return;
   lastHudTick = world.tick;
   renderStats();
+  renderAlcaldes();
   // Only rebuild the history list when the reader is at the top; otherwise
   // the periodic rebuild would yank the scroll position back up.
   const lg = $('eventLog');
@@ -319,6 +321,51 @@ $('stats').addEventListener('click', (e) => {
   const lead = world.leaders[i];
   if (!lead) return;
   if (b.dataset.act === 'go') renderer.focusOn(lead.x, lead.y, 3.2);
+});
+
+// ---- Alcaldes: panel dedicado con TODOS los alcaldes y sus datos ---------
+function renderAlcaldes() {
+  const el = $('alcaldesPanel');
+  if (!el) return;
+  const money = (b) => '$' + Math.round(b).toLocaleString('en-US');
+  const yrs = (t) => Math.floor(t / 360);
+  // Todos los pueblos con dueño y un/a alcalde/sa real, del más valioso al menos.
+  const rows = world.cities
+    .filter((c) => c.owner >= 0 && c.alcaldeRef && !c.alcaldeRef.dead)
+    .sort((a, b) => (b.worth || 0) - (a.worth || 0));
+  $('alcaldeCount').textContent = rows.length;
+  if (!rows.length) {
+    el.innerHTML = '<div class="alc-empty">Aún no hay alcaldes: ningún partido controla un pueblo.</div>';
+    return;
+  }
+  el.innerHTML = rows.map((c) => {
+    const civ = world.civs[c.owner];
+    const a = c.alcaldeRef;
+    const cap = c.capacity || 0;
+    const ci = world.cities.indexOf(c);
+    return `<div class="alc-row" data-city="${ci}" style="border-left-color:${civ.color}">
+      <div class="alc-top">
+        <span class="alc-city">🏛️ ${c.name}</span>
+        <span class="alc-party" style="color:${civ.color}">${civ.name.replace('Los ', '')}</span>
+      </div>
+      <div class="alc-name">👤 ${a.name}</div>
+      <div class="alc-stats">
+        <span title="Edad">🎂 ${yrs(a.age)} a</span>
+        <span title="Dinero personal">💵 ${money(a.balance || 0)}</span>
+        <span title="Valor del pueblo">💰 ${money(c.worth || 0)}</span>
+        <span title="Ciudadanos / capacidad">👥 ${Math.round(c.pop)}/${cap}</span>
+        <span title="Años en el cargo">🗓️ ${yrs(world.tick - (c.alcaldeSince || 0))} a</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Tap an alcalde row to open that citizen's full card.
+$('alcaldesPanel').addEventListener('click', (e) => {
+  const row = e.target.closest('.alc-row');
+  if (!row) return;
+  const c = world.cities[Number(row.dataset.city)];
+  if (c && c.alcaldeRef) { selected = { kind: 'unit', ref: c.alcaldeRef }; renderInspector(); }
 });
 
 // ---- Gráficas: 15 cuadros en vivo ----------------------------------------
