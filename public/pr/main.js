@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=33';
-import { defaultCivs } from './civs.js?v=33';
-import { createWorld } from './sim.js?v=33';
-import { createRenderer } from './render.js?v=33';
-import { POWERS, POWER_BY_ID } from './powers.js?v=33';
-import { avatarDataURL } from './avatar.js?v=33';
+import { generateMap } from './map.js?v=34';
+import { defaultCivs } from './civs.js?v=34';
+import { createWorld } from './sim.js?v=34';
+import { createRenderer } from './render.js?v=34';
+import { POWERS, POWER_BY_ID } from './powers.js?v=34';
+import { avatarDataURL } from './avatar.js?v=34';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -102,8 +102,8 @@ function loop(now) {
 
 // ---- Game calendar (1 tick = 1 DAY; 30-day months, 360-day years) -------
 // Un día por turno: la edad (en años) avanza con el calendario, que arranca el
-// 1/1/148 y corre lento. Formato de fecha: D/M/AAA.
-const BASE_YEAR = 148;       // el calendario arranca el 1/1/148
+// 1/1/1948 y corre lento. Formato de fecha: D/M/AAAA.
+const BASE_YEAR = 1948;      // el calendario arranca el 1/1/1948
 const YEAR_DAYS = 360, MONTH_DAYS = 30;
 function gameTime(ticks) {
   const day = (ticks % MONTH_DAYS) + 1;
