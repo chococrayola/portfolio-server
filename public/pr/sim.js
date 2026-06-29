@@ -18,9 +18,9 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=37';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=37';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=37';
+} from './map.js?v=38';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=38';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=38';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;

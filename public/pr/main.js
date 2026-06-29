@@ -5,12 +5,12 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=37';
-import { defaultCivs } from './civs.js?v=37';
-import { createWorld } from './sim.js?v=37';
-import { createRenderer } from './render.js?v=37';
-import { POWERS, POWER_BY_ID } from './powers.js?v=37';
-import { avatarDataURL } from './avatar.js?v=37';
+import { generateMap } from './map.js?v=38';
+import { defaultCivs } from './civs.js?v=38';
+import { createWorld } from './sim.js?v=38';
+import { createRenderer } from './render.js?v=38';
+import { POWERS, POWER_BY_ID } from './powers.js?v=38';
+import { avatarDataURL } from './avatar.js?v=38';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);

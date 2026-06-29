@@ -1,7 +1,7 @@
 /* render.js — isometric renderer.
  *
- * Draws the world in 2:1 isometric. The terrain is baked once into an offscreen
- * canvas as raised "slabs" (coastal cliffs, elevated hills/mountains/forest);
+ * Draws the world in 2:1 isometric. The flat terrain (green inland + sandy
+ * coast) is baked once into an offscreen canvas as raised "slabs";
  * citizens (free-thinkers + affiliated) and cities are drawn each frame
  * as little iso sprites, depth-sorted back-to-front. A smoothed camera (zoom +
  * pan) maps the iso world into the visible canvas, and screenToTile inverts the
@@ -12,8 +12,8 @@
  *   panByClient, fit, focusOn, getZoom, SCALE
  */
 
-import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=37';
-import { MGRID, OCEAN_ID } from './municipios.js?v=37';
+import { COLS, ROWS, TILE, idx, isOcean, isLand, MUNI_NAMES, MUNI_ABBR } from './map.js?v=38';
+import { MGRID, OCEAN_ID } from './municipios.js?v=38';
 
 const NEUTRAL = '#9aa6b2'; // color for unclaimed cities / free-thinkers
 const ABBR_BY_NAME = {};
@@ -302,8 +302,11 @@ export function createRenderer(canvas, world) {
     const civ = owned ? world.civs[c.owner] : null;
     const col = owned ? civ.color : NEUTRAL;
     const colDark = owned ? (civ.colorDark || civ.color) : '#6c7782';
-    const big = c.pop > 24;
-    const s = TW * (big ? 1.7 : 1.2);
+    // La torre crece con la población del pueblo (más ciudadanos → más alta/grande).
+    const pop = c.pop || 0;
+    const grow = Math.min(1.9, Math.sqrt(pop) / 5); // 0 → ~0; 25 → 1.0; 90 → 1.9 (tope)
+    const s = TW * (1.0 + grow);
+    const big = pop > 40; // bandera en los pueblos más poblados
     const flash = c.flash > 0 ? c.flash / 45 : 0;
     // ownership ring / claim flash
     ctx.fillStyle = col;
