@@ -18,9 +18,9 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=32';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=32';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=32';
+} from './map.js?v=33';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES } from './civs.js?v=33';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=33';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -362,7 +362,11 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   // allí; sólo se re-elige al morir, mudarse, cambiar de partido o cambiar el
   // dueño del pueblo.
   function clearAlcalde(city) {
-    if (city.alcaldeRef) { city.alcaldeRef.isAlcalde = false; city.alcaldeRef.alcaldeOf = null; }
+    // Only strip the citizen's badge if they still belong to THIS city — a
+    // migrant may already have become another city's alcalde (alcaldeOf points
+    // there), and we must not clobber that newer role.
+    const a = city.alcaldeRef;
+    if (a && a.alcaldeOf === city.name) { a.isAlcalde = false; a.alcaldeOf = null; }
     city.alcaldeRef = null; city.alcalde = '—';
   }
   function assignAlcaldes(silent) {
