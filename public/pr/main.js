@@ -5,13 +5,13 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=44';
-import { defaultCivs } from './civs.js?v=44';
-import { createWorld } from './sim.js?v=44';
-import { createRenderer } from './render.js?v=44';
-import { POWERS, POWER_BY_ID } from './powers.js?v=44';
-import { avatarDataURL } from './avatar.js?v=44';
-import { CALENDAR } from './timeline.js?v=44';
+import { generateMap } from './map.js?v=45';
+import { defaultCivs } from './civs.js?v=45';
+import { createWorld } from './sim.js?v=45';
+import { createRenderer } from './render.js?v=45';
+import { POWERS, POWER_BY_ID } from './powers.js?v=45';
+import { avatarDataURL } from './avatar.js?v=45';
+import { CALENDAR } from './timeline.js?v=45';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed', econ: 'pr.econ' };
 const ECON_DEFAULTS = { costOfLiving: 700, panAid: 500, salaryMult: 1, taxMult: 1 };

@@ -533,6 +533,9 @@ body {
 .trait-row { display: grid; grid-template-columns: 110px 1fr 28px; align-items: center; gap: 8px; font-size: 0.8rem; margin: 4px 0; }
 .trait-row input { width: 100%; accent-color: var(--accent); }
 .trait-row .v { text-align: right; font-weight: 700; }
+/* Editor de costos: etiquetas largas + valores anchos ("$2000", "×1.0"). */
+.econ-editor .trait-row { grid-template-columns: 1fr 120px 60px; }
+.econ-editor .trait-row .v { color: var(--accent); white-space: nowrap; }
 
 /* Inspector card */
 .inspector {
