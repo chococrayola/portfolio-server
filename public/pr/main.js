@@ -5,13 +5,13 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=42';
-import { defaultCivs } from './civs.js?v=42';
-import { createWorld } from './sim.js?v=42';
-import { createRenderer } from './render.js?v=42';
-import { POWERS, POWER_BY_ID } from './powers.js?v=42';
-import { avatarDataURL } from './avatar.js?v=42';
-import { CALENDAR } from './timeline.js?v=42';
+import { generateMap } from './map.js?v=43';
+import { defaultCivs } from './civs.js?v=43';
+import { createWorld } from './sim.js?v=43';
+import { createRenderer } from './render.js?v=43';
+import { POWERS, POWER_BY_ID } from './powers.js?v=43';
+import { avatarDataURL } from './avatar.js?v=43';
+import { CALENDAR } from './timeline.js?v=43';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -609,11 +609,12 @@ function renderFreeStats() {
 function renderTaxTable() {
   if (!$('taxTable')) return;
   const $m = (n) => '$' + Math.round(n || 0).toLocaleString('en-US');
+  const $signed = (n) => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
   const tax = world.taxToUS || 0, aid = world.panAid || 0;
   $('taxSummary').innerHTML =
     `<span>Impuestos a EE.UU. <b>${$m(tax)}</b></span>` +
     `<span>Ayuda PAN (federal) <b>${$m(aid)}</b></span>` +
-    `<span>Neto <b>${$m(tax - aid)}</b></span>`;
+    `<span>Neto <b>${$signed(tax - aid)}</b></span>`;
   const rows = world.cities
     .map((c) => ({ name: c.name, v: c.taxCollected || 0 }))
     .filter((r) => r.v > 0)
@@ -926,7 +927,7 @@ function renderInspector() {
     const adult = u.age >= u.adultAt;
     const uSalary = adult ? Math.round((u.dayPay || 0) * 30 * uprosp) : 0;
     const uTax = Math.round(uSalary * (u.taxRate || 0));
-    const uCost = Math.round(700 * uprosp); // COST_OF_LIVING base
+    const uCost = Math.round((world.costOfLiving || 700) * uprosp);
     const $m = (n) => '$' + Math.round(n).toLocaleString('en-US');
     const econRows =
       `<div class="irow"><span>Sueldo/mes</span><span>${adult ? $m(uSalary) : '—'}</span></div>` +

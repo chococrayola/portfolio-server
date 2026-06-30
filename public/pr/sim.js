@@ -18,10 +18,10 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=42';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=42';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=42';
-import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=42';
+} from './map.js?v=43';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=43';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=43';
+import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=43';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -43,7 +43,6 @@ const PRESENCE_INF = 0.22;   // influence per affiliated citizen present
 const NEIGHBOR_INF = 0.9;    // influence a neighboring owned city projects
 const JOIN_K = 0.05;         // affiliation probability scaler
 // Currency
-const BASE_WAGE = 16;        // personal income per econ tick at avg prosperity
 const LEADER_SALARY = 120;   // extra leader pay per econ tick (× budgetFactor)
 const COST_OF_LIVING = 700;  // gasto de vida mensual base (a prosperidad 1.0)
 const PAN_AID = 500;         // ayuda federal mensual a quien está en PAN
@@ -121,6 +120,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     nextId: 1,
   };
   const t = world;
+  world.costOfLiving = COST_OF_LIVING; // fuente única para la UI (inspector)
 
   const tileAt = (x, y) => t.tiles[idx(x, y)];
   function log(text, civIndex = null, tag = null) {
