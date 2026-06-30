@@ -18,10 +18,10 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=41';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=41';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=41';
-import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=41';
+} from './map.js?v=42';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=42';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=42';
+import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=42';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -45,6 +45,8 @@ const JOIN_K = 0.05;         // affiliation probability scaler
 // Currency
 const BASE_WAGE = 16;        // personal income per econ tick at avg prosperity
 const LEADER_SALARY = 120;   // extra leader pay per econ tick (× budgetFactor)
+const COST_OF_LIVING = 700;  // gasto de vida mensual base (a prosperidad 1.0)
+const PAN_AID = 500;         // ayuda federal mensual a quien está en PAN
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -110,6 +112,9 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     vitalHistory: [],       // [{year, births, deaths}] por año cerrado
     _birthsYear: 0,         // acumulador del año en curso
     _deathsYear: 0,
+    taxToUS: 0,             // impuestos acumulados enviados a EE.UU.
+    panAid: 0,              // ayuda PAN (fondos federales) acumulada
+    panCount: 0,            // personas en PAN ahora mismo
     freeCount: 0,
     landCount: 0,           // = number of cities (denominator for territory %)
     timelineIdx: 0,         // next scripted history event to fire
@@ -193,6 +198,8 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         alcalde: '—',       // nombre del/de la alcalde/sa (de alcaldeRef)
         alcaldeRef: null,   // ciudadano/a real que ejerce de alcalde/sa
         alcaldeSince: 0,
+        taxCollected: 0,    // impuestos acumulados aportados por este pueblo
+        panCount: 0,        // residentes en PAN ahora mismo
       });
     }
     t.landCount = t.cities.length;
@@ -209,6 +216,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   function makeCitizen(party, x, y) {
     const here = inBounds(x, y) && isLand(t.tiles[idx(x, y)]);
     const spot = here ? { x, y } : (nearestLandFree(x, y) || { x, y });
+    const prof = pickProfession();
     return {
       id: t.nextId++,
       x: spot.x, y: spot.y,
@@ -220,7 +228,10 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       openness: 0.45 + rng() * 0.55,
       committedFree: false,
       name: pickCitizen(),
-      profession: pickProfession(),         // oficio al azar (ambientación)
+      profession: prof.label,               // oficio al azar
+      dayPay: prof.day,                     // sueldo base por día (a prosperidad 1.0)
+      taxRate: prof.taxPct / 100,           // impuesto mensual sobre el sueldo
+      onPAN: false,                         // ¿recibe asistencia (saldo negativo)?
       balance: Math.round(200 + rng() * 1200), // dinero personal ($)
       homeCity: nearestCity(spot.x, spot.y),
       isLeader: false, isDeputy: false, isAlcalde: false, alcaldeOf: null, rulerName: null, title: null,
@@ -429,20 +440,46 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       t.budgetFactor[p] = sum > 0 ? 1 + Math.min(0.8, sum / 16000) : 0.5;
     }
   }
-  // accrueIncome pays out wages/salaries. It MUST run on a single fixed cadence
-  // (once per ECON_EVERY) — never from powers — so balances grow steadily.
+  // accrueIncome paga el salario EXTRA de los líderes (cada ECON_EVERY). El
+  // sueldo de los ciudadanos es mensual y se maneja en payCitizensMonthly().
   function accrueIncome() {
-    // Personal balances: everyone earns a wage scaled by their city's prosperity.
-    for (const c of t.citizens) {
-      const city = t.cities[c.homeCity];
-      const prosperity = city ? Math.max(0.4, Math.min(2.2, city.worth / 3500)) : 0.5;
-      c.balance = Math.min(50_000_000, (c.balance || 0) + Math.round(BASE_WAGE * prosperity));
-    }
-    // Leaders draw an extra salary from a well-funded party.
     for (let p = 0; p < N; p++) {
       const l = t.leaders[p];
       if (l && !l.dead) l.balance = Math.min(50_000_000, (l.balance || 0) + Math.round(LEADER_SALARY * t.budgetFactor[p]));
     }
+  }
+
+  // Una vez al mes: cada ciudadano cobra su sueldo (solo adultos), paga impuesto
+  // (al pote de EE.UU.) y su costo de vida. Si el saldo queda negativo cae en
+  // PAN y recibe ayuda federal (sale del pote). Todo escala con la prosperidad
+  // del pueblo donde vive.
+  function payCitizensMonthly() {
+    for (const city of t.cities) city.panCount = 0;
+    let panTotal = 0;
+    for (const c of t.citizens) {
+      const city = t.cities[c.homeCity];
+      const prosperity = city ? Math.max(0.4, Math.min(2.2, city.worth / 3500)) : 0.5;
+      let salario = 0;
+      if (c.age >= c.adultAt) {
+        salario = Math.round((c.dayPay || 0) * 30 * prosperity);
+        const imp = Math.round(salario * (c.taxRate || 0));
+        t.taxToUS += imp;
+        if (city) city.taxCollected += imp;
+        salario -= imp;
+      }
+      const costo = Math.round(COST_OF_LIVING * prosperity);
+      c.balance = Math.min(50_000_000, (c.balance || 0) + salario - costo);
+      if (c.balance < 0) {
+        c.onPAN = true;
+        c.balance += PAN_AID;
+        t.panAid += PAN_AID;
+        panTotal++;
+        if (city) city.panCount++;
+      } else {
+        c.onPAN = false;
+      }
+    }
+    t.panCount = panTotal;
   }
 
   // ---- Stats ------------------------------------------------------------
@@ -685,6 +722,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     // Una vez al mes los líderes piensan, mueven campañas y se registra la historia.
     if (t.tick % 30 === 0) {
       recomputeEconomy(); // valores frescos para el cerebro (sin pagar sueldos)
+      payCitizensMonthly(); // sueldos, impuestos (a EE.UU.) y PAN
       for (let p = 0; p < N; p++) runLeaderAI(p);
       decayCampaigns();
       sampleHistory();

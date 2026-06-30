@@ -5,13 +5,13 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=41';
-import { defaultCivs } from './civs.js?v=41';
-import { createWorld } from './sim.js?v=41';
-import { createRenderer } from './render.js?v=41';
-import { POWERS, POWER_BY_ID } from './powers.js?v=41';
-import { avatarDataURL } from './avatar.js?v=41';
-import { CALENDAR } from './timeline.js?v=41';
+import { generateMap } from './map.js?v=42';
+import { defaultCivs } from './civs.js?v=42';
+import { createWorld } from './sim.js?v=42';
+import { createRenderer } from './render.js?v=42';
+import { POWERS, POWER_BY_ID } from './powers.js?v=42';
+import { avatarDataURL } from './avatar.js?v=42';
+import { CALENDAR } from './timeline.js?v=42';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -77,6 +77,8 @@ function buildWorld() {
   renderVitalsTables();
   renderAgesTable();
   renderFreeStats();
+  renderTaxTable();
+  renderPanTable();
   updateClock();
   updateTicker();
   updatePartyStrip();
@@ -192,6 +194,8 @@ setInterval(() => {
   renderVitalsTables();
   renderAgesTable();
   renderFreeStats();
+  renderTaxTable();
+  renderPanTable();
   updateTicker();
   updatePartyStrip();
   if (selected) renderInspector();
@@ -601,6 +605,47 @@ function renderFreeStats() {
     `<span>Afiliaciones acum. <b>${f.recruited}</b></span>`;
 }
 
+// Aportación a EE.UU. (impuestos) y ayuda PAN, con desglose por pueblo.
+function renderTaxTable() {
+  if (!$('taxTable')) return;
+  const $m = (n) => '$' + Math.round(n || 0).toLocaleString('en-US');
+  const tax = world.taxToUS || 0, aid = world.panAid || 0;
+  $('taxSummary').innerHTML =
+    `<span>Impuestos a EE.UU. <b>${$m(tax)}</b></span>` +
+    `<span>Ayuda PAN (federal) <b>${$m(aid)}</b></span>` +
+    `<span>Neto <b>${$m(tax - aid)}</b></span>`;
+  const rows = world.cities
+    .map((c) => ({ name: c.name, v: c.taxCollected || 0 }))
+    .filter((r) => r.v > 0)
+    .sort((a, b) => b.v - a.v)
+    .slice(0, 12);
+  const max = Math.max(1, ...rows.map((r) => r.v));
+  let body = rows.length
+    ? rows.map((r) => `<tr><td>${r.name}</td><td>${$m(r.v)}</td><td><span class="tbar"><span style="width:${Math.round((r.v / max) * 100)}%"></span></span></td></tr>`).join('')
+    : '<tr><td colspan="3" class="dim">Sin recaudación todavía</td></tr>';
+  $('taxTable').innerHTML = `<thead><tr><th>Pueblo</th><th>Recaudado</th><th></th></tr></thead><tbody>${body}</tbody>`;
+}
+
+// Categoría PAN: total de personas con asistencia + desglose por pueblo.
+function renderPanTable() {
+  if (!$('panTable')) return;
+  const pop = world.citizens.length || 1;
+  const pan = world.panCount || 0;
+  $('panSummary').innerHTML =
+    `<span>En PAN <b>${pan}</b> (${Math.round((pan / pop) * 100)}%)</span>` +
+    `<span>Ayuda federal acum. <b>$${Math.round(world.panAid || 0).toLocaleString('en-US')}</b></span>`;
+  const rows = world.cities
+    .map((c) => ({ name: c.name, v: c.panCount || 0 }))
+    .filter((r) => r.v > 0)
+    .sort((a, b) => b.v - a.v)
+    .slice(0, 12);
+  const max = Math.max(1, ...rows.map((r) => r.v));
+  let body = rows.length
+    ? rows.map((r) => `<tr><td>${r.name}</td><td>${r.v}</td><td><span class="tbar"><span style="width:${Math.round((r.v / max) * 100)}%"></span></span></td></tr>`).join('')
+    : '<tr><td colspan="3" class="dim">Nadie en PAN todavía</td></tr>';
+  $('panTable').innerHTML = `<thead><tr><th>Pueblo</th><th>En PAN</th><th></th></tr></thead><tbody>${body}</tbody>`;
+}
+
 function renderLog() {
   const el = $('eventLog');
   el.innerHTML = '';
@@ -813,7 +858,8 @@ function renderCityModal(city) {
     <div class="irow"><span>Ciudadanos</span><span>${Math.round(city.pop)} / ${cap} (${pct}%)</span></div>
     <div class="ibar"><div style="width:${Math.min(100, pct)}%;background:${accent}"></div></div>
     <div class="irow"><span>Valor 💰</span><span>${money(city.worth || 0)}</span></div>
-    <div class="irow dim"><span>Población real (2020)</span><span>${(city.realPop || 0).toLocaleString('en-US')}</span></div>
+    <div class="irow"><span>Impuestos recaudados 🇺🇸</span><span>${money(city.taxCollected || 0)}</span></div>
+    <div class="irow"><span>En PAN 🥫</span><span>${city.panCount || 0}</span></div>
     <div class="cm-break"><div class="ilog-h">Desglose por partido</div>${breakdown}</div>
     <div class="irow"><span>Librepensadores</span><span>${freeN} (compr. ${committed} · indec. ${undecided})</span></div>
     ${neigh}
@@ -874,6 +920,19 @@ function renderInspector() {
     const reign = u.isLeader
       ? `<div class="irow"><span>Mandato</span><span>${years(world.tick - u.since)} años</span></div>` : '';
     const mob = u.mobility < 0.25 ? 'Sedentario/a' : u.mobility > 0.7 ? 'Trotamundos' : 'Moderada';
+    // Economía mensual del ciudadano, escalada por la prosperidad de su pueblo.
+    const ucity = world.cities[u.homeCity];
+    const uprosp = ucity ? Math.max(0.4, Math.min(2.2, (ucity.worth || 0) / 3500)) : 0.5;
+    const adult = u.age >= u.adultAt;
+    const uSalary = adult ? Math.round((u.dayPay || 0) * 30 * uprosp) : 0;
+    const uTax = Math.round(uSalary * (u.taxRate || 0));
+    const uCost = Math.round(700 * uprosp); // COST_OF_LIVING base
+    const $m = (n) => '$' + Math.round(n).toLocaleString('en-US');
+    const econRows =
+      `<div class="irow"><span>Sueldo/mes</span><span>${adult ? $m(uSalary) : '—'}</span></div>` +
+      `<div class="irow"><span>Impuesto/mes 🇺🇸</span><span>${adult ? $m(uTax) : '—'}</span></div>` +
+      `<div class="irow"><span>Costo de vida/mes</span><span>${$m(uCost)}</span></div>` +
+      `<div class="irow"><span>Categoría</span><span>${u.onPAN ? '🥫 PAN (asistencia)' : 'Activo/a'}</span></div>`;
     body.innerHTML = `
       <div class="ihead">
         <img class="iface-img" alt="" src="${av}" />
@@ -886,6 +945,7 @@ function renderInspector() {
       ${u.profession ? `<div class="irow"><span>Profesión</span><span>${u.profession}</span></div>` : ''}
       <div class="irow"><span>Edad</span><span>${years(u.age)} años</span></div>
       <div class="irow"><span>Balance 💵</span><span>$${Math.round(u.balance || 0).toLocaleString('en-US')}</span></div>
+      ${econRows}
       <div class="irow"><span>Movilidad</span><span>${mob}</span></div>
       ${joinedRow}
       ${reign}
@@ -915,7 +975,8 @@ function renderInspector() {
       <div class="irow"><span>Ciudadanos</span><span>${Math.round(c.pop)} / ${cap} (${pct}%)</span></div>
       <div class="ibar"><div style="width:${Math.min(100, pct)}%;background:${accent}"></div></div>
       <div class="irow"><span>Valor 💰</span><span>$${Math.round(c.worth || 0).toLocaleString('en-US')}</span></div>
-      <div class="irow dim"><span>Población real (2020)</span><span>${(c.realPop || 0).toLocaleString('en-US')}</span></div>
+      <div class="irow"><span>Impuestos 🇺🇸</span><span>$${Math.round(c.taxCollected || 0).toLocaleString('en-US')}</span></div>
+      <div class="irow"><span>En PAN 🥫</span><span>${c.panCount || 0}</span></div>
       <div class="irow"><span>Alcalde/sa</span><span>${alc}</span></div>
       <div class="idev"><div class="idev-h">Desarrollo del pueblo</div>
         <canvas id="ispPop" width="212" height="46"></canvas>
