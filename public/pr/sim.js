@@ -18,10 +18,10 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=40';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=40';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=40';
-import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=40';
+} from './map.js?v=41';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=41';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=41';
+import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=41';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -814,6 +814,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (home) home.flash = 30;
     }
     t.citizens = t.citizens.filter((c) => !c.dead);
+    if (picked.size) { t.deaths += picked.size; t._deathsYear += picked.size; }
     const people = (picked.size * PEOPLE_PER_CITIZEN).toLocaleString('en-US');
     log(`${label}: se lleva ~${people} personas.`, null, 'hist');
     recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
