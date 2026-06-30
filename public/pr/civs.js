@@ -20,7 +20,8 @@ export const CIVS = [
     colorDark: '#1550a0',
     founded: 1967,
     start: { units: 8, cityPop: 12 },
-    traits: { aggression: 9, brutality: 9, intelligence: 2, expansion: 8, growth: 7, diplomacy: 2, resilience: 5 },
+    // PNP — maquinaria grande y expansionista (estadista).
+    traits: { aggression: 6, brutality: 2, intelligence: 6, expansion: 9, growth: 8, diplomacy: 7, resilience: 6 },
     specials: { coastBonus: true },
     blurb: 'Estadistas de línea dura. Los más numerosos, los más brutales y los ' +
       'menos astutos. Anexan primero y preguntan nunca.',
@@ -36,7 +37,8 @@ export const CIVS = [
     colorDark: '#9c211e',
     founded: 1938,
     start: { units: 8, cityPop: 12 },
-    traits: { aggression: 5, brutality: 4, intelligence: 6, expansion: 6, growth: 8, diplomacy: 9, resilience: 6 },
+    // PPD — gran carpa, popular y movilizador.
+    traits: { aggression: 5, brutality: 2, intelligence: 7, expansion: 7, growth: 9, diplomacy: 9, resilience: 6 },
     specials: { holdBonus: true },
     blurb: 'El establishment del Estado Libre Asociado. Maquinaria política del ' +
       'statu quo: crecen rápido, defienden bien y prefieren un pacto a una guerra.',
@@ -52,7 +54,8 @@ export const CIVS = [
     colorDark: '#5a2a93',
     founded: 2019,
     start: { units: 5, cityPop: 8 },
-    traits: { aggression: 4, brutality: 2, intelligence: 9, expansion: 5, growth: 6, diplomacy: 8, resilience: 7 },
+    // MVC — tecnócrata y progresista; el partido más "inteligente".
+    traits: { aggression: 3, brutality: 1, intelligence: 10, expansion: 5, growth: 6, diplomacy: 8, resilience: 7 },
     specials: { recruiter: true }, // atrae a los librepensadores
     blurb: 'Movimiento progresista y anticorrupción que rompe el bipartidismo. ' +
       'Idealistas, brillantes y magnéticos para los indecisos.',
@@ -68,7 +71,8 @@ export const CIVS = [
     colorDark: '#177a3c',
     founded: 1946,
     start: { units: 5, cityPop: 8 },
-    traits: { aggression: 4, brutality: 3, intelligence: 9, expansion: 4, growth: 5, diplomacy: 6, resilience: 9 },
+    // PIP — independentista, principista y resiliente; pequeño pero leal.
+    traits: { aggression: 4, brutality: 1, intelligence: 9, expansion: 4, growth: 4, diplomacy: 7, resilience: 10 },
     specials: { guerrilla: true, revive: true },
     blurb: 'La independencia indomable. Pocos pero brillantes e imposibles de ' +
       'exterminar — letales en la montaña y el bosque.',
@@ -84,7 +88,8 @@ export const CIVS = [
     colorDark: '#b5651a',
     founded: 2020,
     start: { units: 2, cityPop: 5 },
-    traits: { aggression: 6, brutality: 3, intelligence: 6, expansion: 3, growth: 3, diplomacy: 8, resilience: 8 },
+    // Eliezer Molina — outsider de base, carismático y resiliente.
+    traits: { aggression: 6, brutality: 2, intelligence: 5, expansion: 4, growth: 4, diplomacy: 9, resilience: 9 },
     specials: { viral: true, lone: true }, // un solo hombre, pero viral
     blurb: 'Un solo hombre contra todos. Agricultor y outsider populista sin ' +
       'maquinaria, pero viral y combativo: convence multitudes desde cero.',

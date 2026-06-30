@@ -5,15 +5,16 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=43';
-import { defaultCivs } from './civs.js?v=43';
-import { createWorld } from './sim.js?v=43';
-import { createRenderer } from './render.js?v=43';
-import { POWERS, POWER_BY_ID } from './powers.js?v=43';
-import { avatarDataURL } from './avatar.js?v=43';
-import { CALENDAR } from './timeline.js?v=43';
+import { generateMap } from './map.js?v=44';
+import { defaultCivs } from './civs.js?v=44';
+import { createWorld } from './sim.js?v=44';
+import { createRenderer } from './render.js?v=44';
+import { POWERS, POWER_BY_ID } from './powers.js?v=44';
+import { avatarDataURL } from './avatar.js?v=44';
+import { CALENDAR } from './timeline.js?v=44';
 
-const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
+const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed', econ: 'pr.econ' };
+const ECON_DEFAULTS = { costOfLiving: 700, panAid: 500, salaryMult: 1, taxMult: 1 };
 const PAINTABLE = new Set(['spawn', 'free']);
 
 const $ = (id) => document.getElementById(id);
@@ -36,6 +37,20 @@ function persistTraits(defs) {
   for (const d of defs) obj[d.id] = { ...d.traits };
   localStorage.setItem(STORAGE.traits, JSON.stringify(obj));
 }
+
+// Config económica ajustable (costo de vida, ayuda PAN, multiplicadores).
+function loadEcon() {
+  const e = { ...ECON_DEFAULTS };
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE.econ));
+    if (raw) for (const k of Object.keys(ECON_DEFAULTS)) if (typeof raw[k] === 'number') e[k] = raw[k];
+  } catch (_) {}
+  return e;
+}
+function persistEcon() {
+  if (world && world.cfg) localStorage.setItem(STORAGE.econ, JSON.stringify(world.cfg));
+}
+let econCfg = loadEcon();
 
 // ---- Game state ----------------------------------------------------------
 let civDefs = loadCivDefs();
@@ -65,6 +80,7 @@ function buildWorld() {
     civs: freshCivs(),
     starts: map.starts,
     seed,
+    econ: econCfg,
   });
   renderer = createRenderer(canvas, world);
   window.__world = world; // debug hook (deterministic stepping in tests)
@@ -924,10 +940,11 @@ function renderInspector() {
     // Economía mensual del ciudadano, escalada por la prosperidad de su pueblo.
     const ucity = world.cities[u.homeCity];
     const uprosp = ucity ? Math.max(0.4, Math.min(2.2, (ucity.worth || 0) / 3500)) : 0.5;
+    const cfg = world.cfg || { costOfLiving: 700, salaryMult: 1, taxMult: 1 };
     const adult = u.age >= u.adultAt;
-    const uSalary = adult ? Math.round((u.dayPay || 0) * 30 * uprosp) : 0;
-    const uTax = Math.round(uSalary * (u.taxRate || 0));
-    const uCost = Math.round((world.costOfLiving || 700) * uprosp);
+    const uSalary = adult ? Math.round((u.dayPay || 0) * 30 * uprosp * cfg.salaryMult) : 0;
+    const uTax = Math.round(uSalary * (u.taxRate || 0) * cfg.taxMult);
+    const uCost = Math.round(cfg.costOfLiving * uprosp);
     const $m = (n) => '$' + Math.round(n).toLocaleString('en-US');
     const econRows =
       `<div class="irow"><span>Sueldo/mes</span><span>${adult ? $m(uSalary) : '—'}</span></div>` +
@@ -1043,6 +1060,41 @@ function renderTraitEditor() {
   });
 }
 
+// Editor de costos económicos (aplica EN VIVO sobre world.cfg).
+const ECON_FIELDS = [
+  { key: 'costOfLiving', label: 'Costo de vida / mes', min: 0, max: 2000, step: 50, fmt: (v) => '$' + v },
+  { key: 'panAid', label: 'Ayuda PAN / mes', min: 0, max: 2000, step: 50, fmt: (v) => '$' + v },
+  { key: 'salaryMult', label: 'Multiplicador de sueldos', min: 0.2, max: 3, step: 0.1, fmt: (v) => '×' + v.toFixed(1) },
+  { key: 'taxMult', label: 'Multiplicador de impuestos', min: 0, max: 2, step: 0.1, fmt: (v) => '×' + v.toFixed(1) },
+];
+function renderEconEditor() {
+  const el = $('econEditor');
+  if (!el) return;
+  el.innerHTML = '';
+  ECON_FIELDS.forEach((f) => {
+    const row = document.createElement('div');
+    row.className = 'trait-row';
+    row.innerHTML = `<label>${f.label}</label>`;
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(f.min); input.max = String(f.max); input.step = String(f.step);
+    input.value = String(world.cfg[f.key]);
+    const v = document.createElement('span');
+    v.className = 'v';
+    v.textContent = f.fmt(world.cfg[f.key]);
+    input.addEventListener('input', () => {
+      const val = Number(input.value);
+      world.cfg[f.key] = val;           // aplica en vivo
+      econCfg[f.key] = val;             // recordar para Reiniciar
+      v.textContent = f.fmt(val);
+      persistEcon();
+    });
+    row.appendChild(input);
+    row.appendChild(v);
+    el.appendChild(row);
+  });
+}
+
 // ---- Wire up controls ----------------------------------------------------
 $('playBtn').addEventListener('click', () => {
   running = !running;
@@ -1071,6 +1123,7 @@ $('speed').addEventListener('input', (e) => {
 });
 
 $('settingsToggle').addEventListener('click', () => {
+  renderEconEditor();
   renderTraitEditor();
   $('settingsOverlay').classList.remove('hidden');
 });
@@ -1083,6 +1136,12 @@ $('resetTraits').addEventListener('click', () => {
   civDefs = defaultCivs();
   persistTraits(civDefs);
   renderTraitEditor();
+});
+$('resetEcon').addEventListener('click', () => {
+  econCfg = { ...ECON_DEFAULTS };
+  if (world && world.cfg) Object.assign(world.cfg, ECON_DEFAULTS);
+  persistEcon();
+  renderEconEditor();
 });
 
 // ---- Init ----------------------------------------------------------------

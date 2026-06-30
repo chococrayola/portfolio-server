@@ -7,7 +7,7 @@
  * urban terrain, just the real coastline.
  */
 
-import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js?v=43';
+import { MCOLS, MROWS, OCEAN_ID, MGRID, NAMES, ABBR, CENTROIDS } from './municipios.js?v=44';
 
 export const COLS = MCOLS;
 export const ROWS = MROWS;

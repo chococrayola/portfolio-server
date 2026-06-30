@@ -524,6 +524,9 @@ body {
   position: sticky; top: -16px; background: var(--panel); padding: 4px 0 8px; z-index: 1; }
 .panel-head h2 { margin: 0; }
 .panel-sub { color: var(--muted); font-size: 0.85rem; margin: 4px 0 12px; }
+.panel-sec { margin: 16px 0 2px; font-size: 0.95rem; font-weight: 800; color: var(--ink);
+  border-top: 1px solid var(--line); padding-top: 12px; }
+.panel-sec:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
 .trait-editor { display: flex; flex-direction: column; gap: 14px; }
 .trait-civ { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .trait-civ h3 { margin: 0 0 8px; font-size: 0.95rem; }

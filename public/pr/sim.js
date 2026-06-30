@@ -18,10 +18,10 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=43';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=43';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=43';
-import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=43';
+} from './map.js?v=44';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=44';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=44';
+import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=44';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -79,7 +79,7 @@ function seedPolicy(civ) {
   return pol;
 }
 
-export function createWorld({ tiles, civs, starts, seed = 1 }) {
+export function createWorld({ tiles, civs, starts, seed = 1, econ = {} }) {
   const rng = mulberry32(seed);
   const N = civs.length;
 
@@ -120,7 +120,13 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     nextId: 1,
   };
   const t = world;
-  world.costOfLiving = COST_OF_LIVING; // fuente única para la UI (inspector)
+  // Config económica ajustable EN VIVO desde settings (la UI escribe aquí).
+  world.cfg = {
+    costOfLiving: econ.costOfLiving != null ? econ.costOfLiving : COST_OF_LIVING,
+    panAid: econ.panAid != null ? econ.panAid : PAN_AID,
+    salaryMult: econ.salaryMult != null ? econ.salaryMult : 1,
+    taxMult: econ.taxMult != null ? econ.taxMult : 1,
+  };
 
   const tileAt = (x, y) => t.tiles[idx(x, y)];
   function log(text, civIndex = null, tag = null) {
@@ -454,6 +460,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   // PAN y recibe ayuda federal (sale del pote). Todo escala con la prosperidad
   // del pueblo donde vive.
   function payCitizensMonthly() {
+    const cfg = t.cfg;
     for (const city of t.cities) city.panCount = 0;
     let panTotal = 0;
     for (const c of t.citizens) {
@@ -461,18 +468,18 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       const prosperity = city ? Math.max(0.4, Math.min(2.2, city.worth / 3500)) : 0.5;
       let salario = 0;
       if (c.age >= c.adultAt) {
-        salario = Math.round((c.dayPay || 0) * 30 * prosperity);
-        const imp = Math.round(salario * (c.taxRate || 0));
+        salario = Math.round((c.dayPay || 0) * 30 * prosperity * cfg.salaryMult);
+        const imp = Math.round(salario * (c.taxRate || 0) * cfg.taxMult);
         t.taxToUS += imp;
         if (city) city.taxCollected += imp;
         salario -= imp;
       }
-      const costo = Math.round(COST_OF_LIVING * prosperity);
+      const costo = Math.round(cfg.costOfLiving * prosperity);
       c.balance = Math.min(50_000_000, (c.balance || 0) + salario - costo);
       if (c.balance < 0) {
         c.onPAN = true;
-        c.balance += PAN_AID;
-        t.panAid += PAN_AID;
+        c.balance += cfg.panAid;
+        t.panAid += cfg.panAid;
         panTotal++;
         if (city) city.panCount++;
       } else {
