@@ -291,6 +291,14 @@ body {
   font-variant-numeric: tabular-nums; white-space: nowrap;
   background: var(--panel-2); border-radius: 6px; padding: 2px 6px;
 }
+/* Eventos históricos guionizados: resaltados sobre la cháchara rutinaria. */
+.event-log.modern .ev-major {
+  background: rgba(244,185,66,0.10);
+  border-left: 3px solid #f4b942;
+  padding-left: 7px;
+}
+.event-log.modern .ev-major:hover { background: rgba(244,185,66,0.16); }
+.event-log.modern .ev-major .ev-text { font-weight: 700; color: #ffe6a6; }
 
 /* Jerarquía de liderazgo en la tarjeta */
 .hierarchy { margin: 8px 0 4px; border-top: 1px solid var(--line); padding-top: 7px; }

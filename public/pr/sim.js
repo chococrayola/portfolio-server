@@ -18,9 +18,10 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=38';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=38';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=38';
+} from './map.js?v=39';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=39';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=39';
+import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=39';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -106,14 +107,15 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     history: [],
     freeCount: 0,
     landCount: 0,           // = number of cities (denominator for territory %)
+    timelineIdx: 0,         // next scripted history event to fire
     nextId: 1,
   };
   const t = world;
 
   const tileAt = (x, y) => t.tiles[idx(x, y)];
-  function log(text, civIndex = null) {
+  function log(text, civIndex = null, tag = null) {
     t.events = t.events || [];
-    t.events.unshift({ tick: t.tick, text, civ: civIndex });
+    t.events.unshift({ tick: t.tick, text, civ: civIndex, tag });
     if (t.events.length > EVENT_CAP) t.events.pop();
   }
   t.events = [];
@@ -653,6 +655,17 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
   // ---- Main tick --------------------------------------------------------
   function step() {
     t.tick++;
+    // Scripted history: fire every event whose game-date we've reached. (The
+    // fast-forward loop in main.js advances one tick at a time, so no event is
+    // ever skipped over.) The headline is tagged 'hist'; the apply() may log
+    // extra mechanical detail (casualties, economy) as normal lines.
+    while (t.timelineIdx < TIMELINE.length && t.tick >= dateToTick(TIMELINE[t.timelineIdx].at)) {
+      const ev = TIMELINE[t.timelineIdx++];
+      log(ev.text, null, 'hist');
+      ev.apply(world);
+    }
+    // Recurring random events keep the island lively (~1–2 per year).
+    if (t.tick % 180 === 0 && rng() < 0.6) fireRandomEvent();
     updateCitizens();
     checkSuccession();
     maybeFlavorEvent();
@@ -768,6 +781,61 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     log(`☕ Buena cosecha de café en ${city.name}: sube su valor.`, city.owner >= 0 ? city.owner : null);
     recomputeEconomy();
   };
+
+  // ---- Timeline / historical-event mutators ----------------------------
+  world.randomCity = function () { return t.cities[(rng() * t.cities.length) | 0]; };
+
+  // Remove up to `sprites` random citizen-sprites island-wide (death by
+  // epidemic). Each sprite ≈ PEOPLE_PER_CITIZEN people, so the log reports the
+  // toll in people. Moderate by design: a handful of sprites at a time.
+  world.epidemic = function (label, sprites) {
+    const target = Math.min(sprites | 0, t.citizens.length);
+    const picked = new Set();
+    let guard = 0;
+    while (picked.size < target && guard++ < target * 40) picked.add((rng() * t.citizens.length) | 0);
+    for (const i of picked) {
+      const c = t.citizens[i];
+      c.dead = true;
+      const home = t.cities[c.homeCity];
+      if (home) home.flash = 30;
+    }
+    t.citizens = t.citizens.filter((c) => !c.dead);
+    const people = (picked.size * PEOPLE_PER_CITIZEN).toLocaleString('en-US');
+    log(`${label}: se lleva ~${people} personas.`, null, 'hist');
+    recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
+  };
+
+  // Scale every city's economic base (boom > 1, recession < 1). Worth only —
+  // never touches personal balances (keeps the income split intact).
+  world.economyShift = function (factor, label) {
+    for (const city of t.cities) city.base = Math.max(120, Math.round(city.base * factor));
+    if (label) log(label, null, 'hist');
+    recomputeEconomy();
+  };
+
+  // Protest/morale shock: a fraction of affiliated citizens near (cx,cy) break
+  // with their party and become free-thinkers again.
+  world.protest = function (cx, cy, r, frac, label) {
+    let freed = 0;
+    for (const c of t.citizens) {
+      if (c.party >= 0 && Math.hypot(c.x - cx, c.y - cy) <= r && rng() < frac) {
+        c.party = -1; c.committedFree = false; c.joined = null; freed++;
+      }
+    }
+    if (label) log(label, null, 'hist');
+    recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
+  };
+
+  // Weighted pick from the recurring random-event pool.
+  function fireRandomEvent() {
+    if (!RANDOM_EVENTS.length) return;
+    const total = RANDOM_EVENTS.reduce((a, e) => a + (e.weight || 1), 0);
+    let r = rng() * total;
+    for (const e of RANDOM_EVENTS) {
+      r -= (e.weight || 1);
+      if (r <= 0) { e.apply(world, rng()); return; }
+    }
+  }
 
   world.reset = function () { /* recreated externally */ };
 

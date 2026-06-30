@@ -5,12 +5,13 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=38';
-import { defaultCivs } from './civs.js?v=38';
-import { createWorld } from './sim.js?v=38';
-import { createRenderer } from './render.js?v=38';
-import { POWERS, POWER_BY_ID } from './powers.js?v=38';
-import { avatarDataURL } from './avatar.js?v=38';
+import { generateMap } from './map.js?v=39';
+import { defaultCivs } from './civs.js?v=39';
+import { createWorld } from './sim.js?v=39';
+import { createRenderer } from './render.js?v=39';
+import { POWERS, POWER_BY_ID } from './powers.js?v=39';
+import { avatarDataURL } from './avatar.js?v=39';
+import { CALENDAR } from './timeline.js?v=39';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -66,6 +67,7 @@ function buildWorld() {
     seed,
   });
   renderer = createRenderer(canvas, world);
+  window.__world = world; // debug hook (deterministic stepping in tests)
   renderer.draw();
   buildCharts();
   renderStats();
@@ -104,8 +106,8 @@ function loop(now) {
 // ---- Game calendar (1 tick = 1 DAY; 30-day months, 360-day years) -------
 // Un día por turno: la edad (en años) avanza con el calendario, que arranca el
 // 1/1/1948 y corre lento. Formato de fecha: D/M/AAAA.
-const BASE_YEAR = 1948;      // el calendario arranca el 1/1/1948
-const YEAR_DAYS = 360, MONTH_DAYS = 30;
+// Calendario compartido (única fuente de verdad: timeline.js).
+const { BASE_YEAR, YEAR_DAYS, MONTH_DAYS } = CALENDAR;
 function gameTime(ticks) {
   const day = (ticks % MONTH_DAYS) + 1;
   const month = (Math.floor(ticks / MONTH_DAYS) % 12) + 1;
@@ -533,13 +535,14 @@ function renderLog() {
     }
     const color = e.civ != null ? world.civs[e.civ].color : '#7c8a99';
     const li = document.createElement('li');
-    li.className = 'ev';
+    li.className = e.tag === 'hist' ? 'ev ev-major' : 'ev';
     const dot = document.createElement('span');
     dot.className = 'ev-dot';
-    dot.style.background = color;
+    dot.style.background = e.tag === 'hist' ? '#f4b942' : color;
     const text = document.createElement('span');
     text.className = 'ev-text';
-    text.textContent = e.text; // textContent avoids HTML injection from names
+    // Scripted history gets a scroll marker; textContent avoids HTML injection.
+    text.textContent = (e.tag === 'hist' ? '📜 ' : '') + e.text;
     const time = document.createElement('span');
     time.className = 'ev-time';
     time.textContent = `${g.day}/${g.month}`;
