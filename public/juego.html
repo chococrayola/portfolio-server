@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1c5e8c" />
   <title>Isla de Poder — Simulación de Puerto Rico</title>
-  <link rel="stylesheet" href="puerto-rico.css?v=39" />
+  <link rel="stylesheet" href="puerto-rico.css?v=40" />
 </head>
 <body>
   <header class="topbar" id="statusBar">
     <div class="status-main">
       <span class="brand">🏝️ Isla de Poder</span>
-      <span class="ver">v39</span>
+      <span class="ver">v40</span>
       <span id="clock" class="clock">—</span>
       <span id="ticker" class="ticker">El mundo despierta…</span>
       <button id="settingsToggle" class="icon-btn" aria-label="Editor de rasgos">⚙️</button>
@@ -68,7 +68,31 @@
       <h2 class="dash-title">Gráficas en vivo · evolución en el tiempo</h2>
       <div id="chartLegend" class="chart-legend"></div>
       <div id="chartsGrid" class="charts-grid"></div>
+
+      <h2 class="dash-title">Estadísticas vitales · por año</h2>
+      <div class="tbl-pair">
+        <div class="tbl-wrap"><h4 class="tbl-h">👶 Nacimientos</h4><table id="birthsTable" class="tbl"></table></div>
+        <div class="tbl-wrap"><h4 class="tbl-h">⚰️ Fallecimientos</h4><table id="deathsTable" class="tbl"></table></div>
+      </div>
+
+      <h2 class="dash-title">Edades de la población</h2>
+      <div id="agesSummary" class="stat-box"></div>
+      <table id="agesTable" class="tbl"></table>
+
+      <h2 class="dash-title">Librepensadores</h2>
+      <div id="freeStats" class="stat-box"></div>
     </section>
+  </div>
+
+  <!-- Pueblo: ventana grande con toda la información -->
+  <div id="cityModal" class="overlay hidden">
+    <div class="panel citymodal">
+      <div class="panel-head">
+        <h2 id="cityModalTitle">Pueblo</h2>
+        <button id="cityModalClose" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="cityModalBody"></div>
+    </div>
   </div>
 
   <!-- Character / city inspector -->
@@ -90,6 +114,6 @@
     </div>
   </div>
 
-  <script type="module" src="pr/main.js?v=39"></script>
+  <script type="module" src="pr/main.js?v=40"></script>
 </body>
 </html>

@@ -18,10 +18,10 @@
 import {
   COLS, ROWS, TILE, idx, inBounds, isLand,
   MUNI_NAMES, MUNI_CENTROIDS, nearestLand,
-} from './map.js?v=39';
-import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=39';
-import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=39';
-import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=39';
+} from './map.js?v=40';
+import { FLAVOR_EVENTS, CIV_INDEX, CITIZEN_NAMES, PROFESSIONS } from './civs.js?v=40';
+import { MUNI_POP, PEOPLE_PER_CITIZEN } from './popdata.js?v=40';
+import { dateToTick, TIMELINE, RANDOM_EVENTS } from './timeline.js?v=40';
 
 // --- Tunables (1 tick = 1 DAY; 30-day months, 360-day years) --------------
 const MAX_CITIZENS = 3000;
@@ -105,6 +105,11 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     deputyLog: civs.map(() => []),
     successionLog: civs.map(() => []),
     history: [],
+    births: 0,              // nacimientos acumulados
+    deaths: 0,              // fallecimientos acumulados
+    vitalHistory: [],       // [{year, births, deaths}] por año cerrado
+    _birthsYear: 0,         // acumulador del año en curso
+    _deathsYear: 0,
     freeCount: 0,
     landCount: 0,           // = number of cities (denominator for territory %)
     timelineIdx: 0,         // next scripted history event to fire
@@ -315,7 +320,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
     const newborns = [];
     for (const c of t.citizens) {
       c.age += 1;
-      if (c.age > c.maxAge) { c.dead = true; continue; } // dies of old age
+      if (c.age > c.maxAge) { c.dead = true; t.deaths++; t._deathsYear++; continue; } // dies of old age
       moveCitizen(c);
       if (c.party < 0 && !c.committedFree && c.age >= c.adultAt && (t.tick + c.id) % AFFIL_EVERY === 0) {
         tryAffiliate(c);
@@ -327,6 +332,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         const baby = makeCitizen(-1, c.x, c.y); // children are born free-thinkers
         baby.homeCity = c.homeCity;
         newborns.push(baby);
+        t.births++; t._birthsYear++;
       }
       survivors.push(c);
     }
@@ -683,6 +689,12 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       decayCampaigns();
       sampleHistory();
     }
+    // Cierre de año: registra nacidos/fallecidos del año y reinicia acumuladores.
+    if (t.tick > 0 && t.tick % YEAR_DAYS === 0) {
+      t.vitalHistory.push({ year: Math.floor(t.tick / YEAR_DAYS), births: t._birthsYear, deaths: t._deathsYear });
+      if (t.vitalHistory.length > 30) t.vitalHistory.shift();
+      t._birthsYear = 0; t._deathsYear = 0;
+    }
     if (t.tick % 120 === 0) {
       t.history.push({
         pop: t.stats.map((s) => s.pop),
@@ -709,6 +721,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
         if (inBounds(x, y) && Math.hypot(x - cx, y - cy) <= r * 0.5 && isLand(t.tiles[idx(x, y)]) && rng() < 0.3) t.tiles[idx(x, y)] = TILE.BEACH;
       }
     }
+    if (cas) { t.deaths += cas; t._deathsYear += cas; }
     if (label) log(label + (cas ? ` (${cas} víctimas)` : ''));
     recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
   };
@@ -727,6 +740,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
       if (Math.hypot(c.x - cx, c.y - cy) <= r && rng() < 0.7) { c.dead = true; gone++; return false; }
       return true;
     });
+    if (gone) { t.deaths += gone; t._deathsYear += gone; }
     log(`✈️ Éxodo: ${gone} boricuas se mudan a la diáspora.`);
     recomputeCityOwners(true); recomputeStats(); recomputeEconomy();
   };
@@ -841,6 +855,7 @@ export function createWorld({ tiles, civs, starts, seed = 1 }) {
 
   // ---- Boot -------------------------------------------------------------
   seedCities();
+  world.cityNeighbors = cityNeighbors; // vecinos por ciudad (para el modal del pueblo)
   seedCitizens();
   return world;
 }

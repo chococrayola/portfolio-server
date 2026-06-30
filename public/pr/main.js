@@ -5,13 +5,13 @@
  * localStorage and applied on Reset).
  */
 
-import { generateMap } from './map.js?v=39';
-import { defaultCivs } from './civs.js?v=39';
-import { createWorld } from './sim.js?v=39';
-import { createRenderer } from './render.js?v=39';
-import { POWERS, POWER_BY_ID } from './powers.js?v=39';
-import { avatarDataURL } from './avatar.js?v=39';
-import { CALENDAR } from './timeline.js?v=39';
+import { generateMap } from './map.js?v=40';
+import { defaultCivs } from './civs.js?v=40';
+import { createWorld } from './sim.js?v=40';
+import { createRenderer } from './render.js?v=40';
+import { POWERS, POWER_BY_ID } from './powers.js?v=40';
+import { avatarDataURL } from './avatar.js?v=40';
+import { CALENDAR } from './timeline.js?v=40';
 
 const STORAGE = { traits: 'pr.traits', speed: 'pr.speed', seed: 'pr.seed' };
 const PAINTABLE = new Set(['spawn', 'free']);
@@ -74,6 +74,9 @@ function buildWorld() {
   renderAlcaldes();
   renderLog();
   renderCharts();
+  renderVitalsTables();
+  renderAgesTable();
+  renderFreeStats();
   updateClock();
   updateTicker();
   updatePartyStrip();
@@ -186,9 +189,13 @@ setInterval(() => {
   const lg = $('eventLog');
   if (!lg || lg.scrollTop <= 6) renderLog();
   renderCharts();
+  renderVitalsTables();
+  renderAgesTable();
+  renderFreeStats();
   updateTicker();
   updatePartyStrip();
   if (selected) renderInspector();
+  if (cityModalRef) renderCityModal(cityModalRef);
 }, 350);
 
 function updatePlayBtn() {
@@ -377,20 +384,33 @@ $('alcaldesPanel').addEventListener('click', (e) => {
 const CHART_DEFS = [
   { id: 'c1', title: 'Afiliados por partido (tiempo)', kind: 'lines', get: () => world.history.map((h) => h.pop) },
   { id: 'c2', title: 'Ciudades por partido (tiempo)', kind: 'lines', get: () => world.history.map((h) => h.terr) },
-  { id: 'c3', title: 'Presupuesto en el tiempo ($)', kind: 'lines', get: () => world.history.map((h) => h.budget) },
+  { id: 'c3', title: 'Presupuesto por partido (tiempo)', kind: 'lines', get: () => world.history.map((h) => h.budget) },
   { id: 'c4', title: 'Librepensadores en el tiempo', kind: 'lineOne', get: () => world.history.map((h) => h.free) },
-  { id: 'c5', title: 'Afiliados actuales', kind: 'bars', get: () => world.stats.map((s) => s.pop) },
-  { id: 'c6', title: 'Ciudades (%)', kind: 'bars', get: () => world.stats.map((s) => Math.round((s.territory / (world.landCount || 1)) * 100)) },
-  { id: 'c7', title: 'Ciudades', kind: 'bars', get: () => world.stats.map((s) => s.cities) },
-  { id: 'c8', title: 'Afiliados (ciudadanos)', kind: 'bars', get: () => world.stats.map((s) => s.units) },
-  { id: 'c9', title: 'Afiliaciones (acum.)', kind: 'bars', get: () => world.recruited.slice() },
-  { id: 'c10', title: 'Libres vs afiliados', kind: 'donut', get: () => [world.freeCount || 0, world.stats.reduce((a, s) => a + s.pop, 0)] },
-  { id: 'c11', title: 'Presupuesto actual ($)', kind: 'bars', get: () => world.budget.map((b) => Math.round(b)) },
-  { id: 'c12', title: 'Reparto de ciudades', kind: 'donut', get: () => world.stats.map((s) => s.cities) },
-  { id: 'c13', title: 'Mandato del líder (años)', kind: 'bars', get: () => world.leaders.map((l) => (l ? Math.floor((world.tick - l.since) / 360) : 0)) },
-  { id: 'c14', title: 'Edades de la población', kind: 'hist', get: () => citizenBuckets((c) => c.age) },
-  { id: 'c15', title: 'Antigüedad afiliada', kind: 'hist', get: () => citizenBuckets((c) => world.tick - c.joined, 10, (c) => c.party >= 0 && c.joined != null) },
+  { id: 'c5', title: 'Nacimientos vs fallecimientos (por año)', kind: 'lines', cols: ['#43c463', '#e0524a'],
+    get: () => (world.vitalHistory || []).map((v) => [v.births, v.deaths]) },
+  { id: 'c6', title: 'Reparto de ciudades', kind: 'donut', get: () => world.stats.map((s) => s.cities) },
+  { id: 'c7', title: 'Libres vs afiliados', kind: 'donut', cols: ['#9aa6b2', '#f4b942'],
+    get: () => [world.freeCount || 0, world.stats.reduce((a, s) => a + s.pop, 0)] },
+  { id: 'c8', title: 'Librepensadores: comprometidos vs indecisos', kind: 'donut', cols: ['#6c7782', '#9aa6b2'],
+    get: () => { const f = freeStats(); return [f.committed, f.undecided]; } },
+  { id: 'c9', title: 'Afiliados actuales por partido', kind: 'bars', get: () => world.stats.map((s) => s.pop) },
+  { id: 'c10', title: 'Ciudades (%) por partido', kind: 'bars', get: () => world.stats.map((s) => Math.round((s.territory / (world.landCount || 1)) * 100)) },
+  { id: 'c11', title: 'Afiliaciones acumuladas', kind: 'bars', get: () => world.recruited.slice() },
+  { id: 'c12', title: 'Edades de la población', kind: 'hist', get: () => citizenBuckets((c) => c.age) },
 ];
+
+// Estadísticas de librepensadores (calculadas en vivo desde la población).
+function freeStats() {
+  let total = 0, committed = 0, undecided = 0, adults = 0, ageSum = 0;
+  for (const c of world.citizens) {
+    if (c.party >= 0) continue;
+    total++; ageSum += c.age;
+    if (c.committedFree) committed++; else undecided++;
+    if (c.age >= c.adultAt) adults++;
+  }
+  const recruited = world.recruited ? world.recruited.reduce((a, b) => a + b, 0) : 0;
+  return { total, committed, undecided, adults, recruited, avgAge: total ? ageSum / total : 0 };
+}
 
 // Histograma sobre los ciudadanos. `pred` (opcional) filtra quién cuenta — p.ej.
 // la antigüedad afiliada sólo considera a los afiliados, no a los indecisos.
@@ -431,8 +451,8 @@ function renderCharts() {
     const W = cv.width, H = cv.height;
     x.clearRect(0, 0, W, H);
     const data = d.get();
-    const cols = d.id === 'c10' ? ['#9aa6b2', '#f4b942'] : colors;
-    if (d.kind === 'lines') drawLines(x, W, H, data, colors);
+    const cols = d.cols || colors;
+    if (d.kind === 'lines') drawLines(x, W, H, data, cols);
     else if (d.kind === 'lineOne') drawLines(x, W, H, data.map((v) => [v]), ['#f4b942']);
     else if (d.kind === 'bars') drawBars(x, W, H, data, cols);
     else if (d.kind === 'donut') drawDonut(x, W, H, data, cols);
@@ -517,6 +537,68 @@ function noData(x, W, H) {
   x.font = '11px system-ui, sans-serif';
   x.textAlign = 'left';
   x.fillText('Recopilando…', 6, H / 2);
+}
+
+// ---- Tablas de estadísticas (vitales / edades / librepensadores) ----------
+function renderVitalsTables() {
+  if (!$('birthsTable')) return;
+  const rows = (world.vitalHistory || []).slice().reverse(); // año más reciente arriba
+  const curLabel = 'Año ' + (BASE_YEAR + Math.floor(world.tick / YEAR_DAYS));
+  const build = (key, head) => {
+    const cur = key === 'births' ? (world._birthsYear || 0) : (world._deathsYear || 0);
+    const tot = key === 'births' ? (world.births || 0) : (world.deaths || 0);
+    let body = `<tr class="cur"><td>${curLabel} · en curso</td><td>${cur}</td></tr>`;
+    for (const v of rows) body += `<tr><td>Año ${BASE_YEAR + v.year - 1}</td><td>${v[key]}</td></tr>`;
+    if (!rows.length && !cur) body = '<tr><td colspan="2" class="dim">Sin datos todavía</td></tr>';
+    return `<thead><tr><th>Año</th><th>${head}</th></tr></thead><tbody>${body}` +
+      `<tr class="tot"><td>Total</td><td>${tot}</td></tr></tbody>`;
+  };
+  $('birthsTable').innerHTML = build('births', 'Nacidos');
+  $('deathsTable').innerHTML = build('deaths', 'Fallecidos');
+}
+
+const AGE_BRACKETS = [[0, 15, '0–15 (menores)'], [16, 29, '16–29'], [30, 44, '30–44'], [45, 59, '45–59'], [60, 74, '60–74'], [75, 999, '75+']];
+function renderAgesTable() {
+  if (!$('agesTable')) return;
+  const counts = AGE_BRACKETS.map(() => 0);
+  let total = 0, ageSumY = 0, oldest = 0, minors = 0, adults = 0, elders = 0;
+  for (const c of world.citizens) {
+    const y = c.age / 360;
+    total++; ageSumY += y; if (y > oldest) oldest = y;
+    if (c.age < c.adultAt) minors++; else adults++;
+    if (c.age > c.maxAge * 0.72) elders++;
+    for (let i = 0; i < AGE_BRACKETS.length; i++) { if (y >= AGE_BRACKETS[i][0] && y <= AGE_BRACKETS[i][1]) { counts[i]++; break; } }
+  }
+  const max = Math.max(1, ...counts);
+  let body = '';
+  AGE_BRACKETS.forEach((b, i) => {
+    const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+    const w = total ? Math.round((counts[i] / max) * 100) : 0;
+    body += `<tr><td>${b[2]}</td><td>${counts[i]}</td><td><span class="tbar"><span style="width:${w}%"></span></span>${pct}%</td></tr>`;
+  });
+  $('agesTable').innerHTML = `<thead><tr><th>Edad</th><th>Personas</th><th>%</th></tr></thead><tbody>${body}</tbody>`;
+  const avg = total ? ageSumY / total : 0;
+  const p = (n) => (total ? Math.round((n / total) * 100) : 0);
+  $('agesSummary').innerHTML =
+    `<span><b>${total}</b> personas</span>` +
+    `<span>Promedio <b>${avg.toFixed(1)}</b> a</span>` +
+    `<span>Mayor <b>${Math.floor(oldest)}</b> a</span>` +
+    `<span>Menores <b>${p(minors)}%</b></span>` +
+    `<span>Adultos <b>${p(adults)}%</b></span>` +
+    `<span>Mayores <b>${p(elders)}%</b></span>`;
+}
+
+function renderFreeStats() {
+  if (!$('freeStats')) return;
+  const f = freeStats();
+  const p = (n) => (f.total ? Math.round((n / f.total) * 100) : 0);
+  $('freeStats').innerHTML =
+    `<span>Total <b>${f.total}</b></span>` +
+    `<span>Comprometidos <b>${f.committed}</b> (${p(f.committed)}%)</span>` +
+    `<span>Indecisos <b>${f.undecided}</b> (${p(f.undecided)}%)</span>` +
+    `<span>Adultos elegibles <b>${f.adults}</b></span>` +
+    `<span>Edad promedio <b>${(f.avgAge / 360).toFixed(1)}</b> a</span>` +
+    `<span>Afiliaciones acum. <b>${f.recruited}</b></span>`;
 }
 
 function renderLog() {
@@ -618,6 +700,7 @@ function pinchState() {
 }
 
 let tap = null; // tracks a candidate tap for click-to-inspect (Look tool)
+let gestureConsumed = false; // true when a tap opened the city modal (skip tool/pan)
 
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture?.(e.pointerId);
@@ -625,7 +708,10 @@ canvas.addEventListener('pointerdown', (e) => {
   if (pointers.size === 1) {
     lastSingle = { x: e.clientX, y: e.clientY };
     tap = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false };
-    if (tool !== 'inspect') applyTool(e.clientX, e.clientY);
+    // Clic en cualquier pueblo abre su ventana grande — con cualquier herramienta.
+    const hitCity = cityHitAt(e.clientX, e.clientY);
+    if (hitCity) { gestureConsumed = true; openCityModal(hitCity); }
+    else if (tool !== 'inspect') applyTool(e.clientX, e.clientY);
   } else if (pointers.size === 2) {
     pinch = pinchState();
     lastSingle = null;
@@ -643,7 +729,7 @@ canvas.addEventListener('pointermove', (e) => {
       renderer.panByClient(ns.midX - pinch.midX, ns.midY - pinch.midY);
     }
     pinch = ns;
-  } else if (pointers.size === 1) {
+  } else if (pointers.size === 1 && !gestureConsumed) {
     if (tool === 'inspect') {
       if (lastSingle) renderer.panByClient(e.clientX - lastSingle.x, e.clientY - lastSingle.y);
       lastSingle = { x: e.clientX, y: e.clientY };
@@ -653,13 +739,14 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 function endPointer(e) {
-  // A clean tap with the Look tool selects a character/city to inspect.
-  if (tool === 'inspect' && tap && e.pointerId === tap.id && !tap.moved && pointers.size === 1) {
+  // A clean tap with the Look tool selects a character/city to inspect (unless
+  // the tap already opened the city modal).
+  if (!gestureConsumed && tool === 'inspect' && tap && e.pointerId === tap.id && !tap.moved && pointers.size === 1) {
     inspectAt(e.clientX, e.clientY);
   }
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
-  if (pointers.size === 0) { lastSingle = null; tap = null; }
+  if (pointers.size === 0) { lastSingle = null; tap = null; gestureConsumed = false; }
   else { const p = [...pointers.values()][0]; lastSingle = { x: p.x, y: p.y }; }
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -676,6 +763,70 @@ $('zoomFit').addEventListener('click', () => renderer.fit());
 
 // ---- Inspector (tap a character/city with the Look tool) -----------------
 let selected = null; // { kind: 'unit'|'city', ref }
+let cityModalRef = null; // ciudad abierta en la ventana grande (o null)
+
+// ---- Ventana grande del pueblo (clic en cualquier pueblo del mapa) --------
+function cityHitAt(clientX, clientY) {
+  const { x, y } = renderer.screenToTile(clientX, clientY);
+  const c = world.cityAtTile(x, y);
+  return (c && Math.hypot(c.x - x, c.y - y) <= 1.6) ? c : null;
+}
+function openCityModal(city) { cityModalRef = city; renderCityModal(city); $('cityModal').classList.remove('hidden'); }
+function closeCityModal() { cityModalRef = null; $('cityModal').classList.add('hidden'); }
+
+function renderCityModal(city) {
+  if (!$('cityModal')) return;
+  const owned = city.owner >= 0;
+  const civ = owned ? world.civs[city.owner] : null;
+  const accent = owned ? civ.color : '#9aa6b2';
+  const cap = city.capacity || 0;
+  const pct = cap ? Math.round((city.pop / cap) * 100) : 0;
+  const money = (b) => '$' + Math.round(b).toLocaleString('en-US');
+  const ci = world.cities.indexOf(city);
+  $('cityModalTitle').textContent = city.name;
+  // Librepensadores del pueblo: comprometidos vs indecisos.
+  let committed = 0, undecided = 0;
+  for (const c of world.citizens) {
+    if (c.homeCity === ci && c.party < 0) { if (c.committedFree) committed++; else undecided++; }
+  }
+  // Desglose por partido (barras proporcionales a la población del pueblo).
+  const totalPeople = Math.max(1, city.pop);
+  let breakdown = '';
+  world.civs.forEach((cc, p) => {
+    const n = city.tally ? city.tally[p] : 0;
+    if (!n) return;
+    breakdown += `<div class="cm-row"><span class="cm-chip" style="background:${cc.color};color:#06101a">${cc.name.replace('Los ', '')}</span>` +
+      `<span class="cm-bar"><span style="width:${Math.round((n / totalPeople) * 100)}%;background:${cc.color}"></span></span><span class="cm-n">${n}</span></div>`;
+  });
+  const freeN = city.free || 0;
+  breakdown += `<div class="cm-row"><span class="cm-chip" style="background:#9aa6b2;color:#06101a">Libres</span>` +
+    `<span class="cm-bar"><span style="width:${Math.round((freeN / totalPeople) * 100)}%;background:#9aa6b2"></span></span><span class="cm-n">${freeN}</span></div>`;
+  let neigh = '';
+  if (world.cityNeighbors && ci >= 0 && world.cityNeighbors[ci]) {
+    neigh = `<div class="cm-neighbors">Vecinos: ${world.cityNeighbors[ci].map((j) => world.cities[j].name).join(' · ')}</div>`;
+  }
+  const sinceTxt = (owned && city.alcaldeSince != null) ? ` · desde ${formatDate(city.alcaldeSince)}` : '';
+  $('cityModalBody').innerHTML = `
+    <p class="cm-sub">Municipio de ${city.muni || city.name}</p>
+    <div class="irow"><span>Control</span><span class="cm-chip" style="background:${accent};color:#06101a">${owned ? civ.name : 'Neutral'}</span></div>
+    <div class="irow"><span>Alcalde/sa</span><span>${city.alcalde || '—'}${sinceTxt}</span></div>
+    <div class="irow"><span>Ciudadanos</span><span>${Math.round(city.pop)} / ${cap} (${pct}%)</span></div>
+    <div class="ibar"><div style="width:${Math.min(100, pct)}%;background:${accent}"></div></div>
+    <div class="irow"><span>Valor 💰</span><span>${money(city.worth || 0)}</span></div>
+    <div class="irow dim"><span>Población real (2020)</span><span>${(city.realPop || 0).toLocaleString('en-US')}</span></div>
+    <div class="cm-break"><div class="ilog-h">Desglose por partido</div>${breakdown}</div>
+    <div class="irow"><span>Librepensadores</span><span>${freeN} (compr. ${committed} · indec. ${undecided})</span></div>
+    ${neigh}
+    <div class="cm-dev"><div class="idev-h">Desarrollo del pueblo</div>
+      <canvas id="cmPop" width="412" height="60"></canvas>
+      <canvas id="cmWorth" width="412" height="60"></canvas>
+    </div>`;
+  const hist = (world.cityHistory && ci >= 0) ? world.cityHistory[ci] : [];
+  drawSpark('cmPop', hist, 'pop', accent, 'Población');
+  drawSpark('cmWorth', hist, 'worth', '#f4b942', 'Valor');
+}
+$('cityModalClose').addEventListener('click', closeCityModal);
+$('cityModal').addEventListener('click', (e) => { if (e.target === $('cityModal')) closeCityModal(); });
 
 function inspectAt(clientX, clientY) {
   const { x, y } = renderer.screenToTile(clientX, clientY);

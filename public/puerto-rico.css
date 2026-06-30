@@ -165,6 +165,44 @@ body {
 .chart-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 2px 12px; font-size: 0.85rem; }
 .chart-legend .lg { display: flex; align-items: center; gap: 6px; }
 .chart-legend .lgd { width: 13px; height: 13px; border-radius: 3px; }
+
+/* Tablas de estadísticas (vitales, edades) */
+.tbl-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .tbl-pair { grid-template-columns: 1fr; } }
+.tbl-wrap { min-width: 0; }
+.tbl-h { margin: 0 0 4px; font-size: 0.82rem; color: var(--muted); font-weight: 700; }
+.tbl {
+  width: 100%; border-collapse: collapse; font-size: 0.82rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+}
+.tbl th, .tbl td { text-align: left; padding: 5px 9px; }
+.tbl thead th { color: var(--muted); font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; background: var(--panel-2); }
+.tbl tbody tr + tr td { border-top: 1px solid rgba(43,58,74,0.45); }
+.tbl td:nth-child(2), .tbl td:nth-child(3) { font-variant-numeric: tabular-nums; }
+.tbl td:last-child { width: 46%; }
+.tbl tr.cur td { color: var(--accent); font-weight: 700; }
+.tbl tr.tot td { font-weight: 800; border-top: 2px solid var(--line); }
+.tbl td.dim { color: var(--muted); font-style: italic; }
+.tbl .tbar { display: inline-block; vertical-align: middle; width: 52px; height: 7px; margin-right: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.tbl .tbar > span { display: block; height: 100%; background: var(--accent); }
+
+/* Cajas de resumen (edades, librepensadores) */
+.stat-box { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 10px; margin-bottom: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-size: 0.82rem; color: var(--muted); }
+.stat-box span b { color: var(--ink); }
+
+/* Ventana grande del pueblo */
+.citymodal { max-width: 460px; width: min(94vw, 460px); }
+.cm-sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
+.cm-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 0.78rem; }
+.cm-break { margin: 8px 0; }
+.cm-break .cm-row { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin: 3px 0; }
+.cm-break .cm-bar { flex: 1; height: 9px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
+.cm-break .cm-bar > span { display: block; height: 100%; }
+.cm-break .cm-n { width: 34px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.cm-neighbors { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
+.cm-dev { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.cm-dev canvas { width: 100%; height: auto; display: block; background: #0c141d; border-radius: 6px; margin-top: 4px; }
 .canvas-wrap {
   position: relative;
   background: #0a1019;
