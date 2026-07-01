@@ -73,6 +73,8 @@ const MONTHLY_ODDS_BUDGET = 450;
 const oddsCache = new Map();
 const espnCache = new Map();
 let sportsListCache = { data: null, fetchedAt: 0 };
+let sportsListInFlight = null;
+const oddsInFlight = new Map();
 let quotaUsage = { month: currentMonthKey(), count: 0 };
 
 function currentMonthKey() {
@@ -94,18 +96,29 @@ async function getInSeasonCuratedSports() {
     if (sportsListCache.data && now - sportsListCache.fetchedAt < SPORTS_LIST_TTL_MS) {
         return sportsListCache.data;
     }
-    try {
-        const res = await fetch(`${ODDS_API_BASE}/sports?apiKey=${ODDS_API_KEY}`);
-        if (!res.ok) throw new Error(`sports list responded ${res.status}`);
-        const list = await res.json();
-        const activeKeys = new Set(list.filter((s) => s.active).map((s) => s.key));
-        const inSeason = CURATED_SPORTS.filter((s) => activeKeys.has(s.sportKey));
-        sportsListCache = { data: inSeason, fetchedAt: now };
-        return inSeason;
-    } catch (err) {
-        console.warn('live-bets: failed to fetch sports list —', err.message);
-        return [];
-    }
+    // De-dupe concurrent cache-miss requests so a burst of simultaneous
+    // visitors triggers one upstream fetch, not one per request.
+    if (sportsListInFlight) return sportsListInFlight;
+
+    sportsListInFlight = (async () => {
+        try {
+            const res = await fetch(`${ODDS_API_BASE}/sports?apiKey=${ODDS_API_KEY}`);
+            if (!res.ok) throw new Error(`sports list responded ${res.status}`);
+            const list = await res.json();
+            const activeKeys = new Set(list.filter((s) => s.active).map((s) => s.key));
+            const inSeason = CURATED_SPORTS.filter((s) => activeKeys.has(s.sportKey));
+            sportsListCache = { data: inSeason, fetchedAt: now };
+            return inSeason;
+        } catch (err) {
+            console.warn('live-bets: failed to fetch sports list —', err.message);
+            // Fall back to the last known-good list rather than treating
+            // every curated sport as out-of-season on a transient blip.
+            return sportsListCache.data || [];
+        } finally {
+            sportsListInFlight = null;
+        }
+    })();
+    return sportsListInFlight;
 }
 
 function pointPrice(outcome) {
@@ -173,22 +186,42 @@ async function getOddsForSport(sport) {
         return { status: 'unavailable', games: [] };
     }
 
-    try {
-        quotaUsage.count += 1;
-        const url =
-            `${ODDS_API_BASE}/sports/${sport.sportKey}/odds` +
-            `?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&dateFormat=iso&oddsFormat=american`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`odds ${sport.sportKey} responded ${res.status}`);
-        const events = await res.json();
-        const games = events.map((e) => normalizeOddsApiEvent(e, sport));
-        const result = { status: 'ok', games, fetchedAt: now };
-        oddsCache.set(sport.sportKey, result);
-        return result;
-    } catch (err) {
-        console.warn(`live-bets: odds fetch failed for ${sport.sportKey} —`, err.message);
-        return cached || { status: 'unavailable', games: [] };
-    }
+    if (oddsInFlight.has(sport.sportKey)) return oddsInFlight.get(sport.sportKey);
+
+    const promise = (async () => {
+        try {
+            quotaUsage.count += 1;
+            const url =
+                `${ODDS_API_BASE}/sports/${sport.sportKey}/odds` +
+                `?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&dateFormat=iso&oddsFormat=american`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`odds ${sport.sportKey} responded ${res.status}`);
+            const events = await res.json();
+            // Normalize each event independently — one malformed record
+            // shouldn't blank out odds for the whole league.
+            const games = [];
+            for (const e of events) {
+                try {
+                    games.push(normalizeOddsApiEvent(e, sport));
+                } catch (eventErr) {
+                    console.warn(
+                        `live-bets: skipping malformed event for ${sport.sportKey} —`,
+                        eventErr.message
+                    );
+                }
+            }
+            const result = { status: 'ok', games, fetchedAt: now };
+            oddsCache.set(sport.sportKey, result);
+            return result;
+        } catch (err) {
+            console.warn(`live-bets: odds fetch failed for ${sport.sportKey} —`, err.message);
+            return cached || { status: 'unavailable', games: [] };
+        } finally {
+            oddsInFlight.delete(sport.sportKey);
+        }
+    })();
+    oddsInFlight.set(sport.sportKey, promise);
+    return promise;
 }
 
 function normalizeEspnEvent(event, descriptor) {
@@ -254,6 +287,7 @@ function filterToday(games) {
 }
 
 app.get('/api/live-bets', async (req, res) => {
+  try {
     const inSeason = ODDS_API_KEY ? await getInSeasonCuratedSports() : [];
     const inSeasonKeys = new Set(inSeason.map((s) => s.sportKey));
 
@@ -316,6 +350,9 @@ app.get('/api/live-bets', async (req, res) => {
         }
         section.games = kept;
     }
+    // A section can lose its only game(s) to the Puerto Rico hoist above —
+    // drop it now rather than rendering an empty "0 games" card.
+    const nonEmptyCuratedSections = curatedSections.filter((section) => section.games.length > 0);
 
     const sections = [];
     if (prGames.length) {
@@ -329,7 +366,7 @@ app.get('/api/live-bets', async (req, res) => {
             games: prGames,
         });
     }
-    sections.push(...curatedSections);
+    sections.push(...nonEmptyCuratedSections);
 
     res.status(200).json({
         generatedAt: new Date().toISOString(),
@@ -337,6 +374,10 @@ app.get('/api/live-bets', async (req, res) => {
         oddsApiConfigured: Boolean(ODDS_API_KEY),
         sections,
     });
+  } catch (err) {
+    console.error('live-bets: unhandled error building response —', err);
+    res.status(500).json({ error: 'Failed to load live bets.' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;

@@ -81,6 +81,9 @@ async function loadFromEspnFallback() {
     }
     section.games = kept;
   }
+  // A section can lose its only game(s) to the Puerto Rico hoist above —
+  // drop it now rather than rendering an empty "0 games" card.
+  const nonEmptyCuratedSections = curatedSections.filter((section) => section.games.length > 0);
 
   const sections = [];
   if (prGames.length) {
@@ -94,7 +97,7 @@ async function loadFromEspnFallback() {
       games: prGames,
     });
   }
-  sections.push(...curatedSections);
+  sections.push(...nonEmptyCuratedSections);
 
   return { generatedAt: new Date().toISOString(), oddsApiConfigured: false, sections };
 }
