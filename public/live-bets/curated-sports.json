@@ -5,5 +5,7 @@
   { "sportKey": "baseball_mlb", "league": "MLB", "sportGroup": "Baseball", "espnPath": "baseball/mlb" },
   { "sportKey": "icehockey_nhl", "league": "NHL", "sportGroup": "Hockey", "espnPath": "hockey/nhl" },
   { "sportKey": "soccer_epl", "league": "Premier League", "sportGroup": "Soccer", "espnPath": "soccer/eng.1" },
+  { "sportKey": "soccer_fifa_world_cup", "league": "FIFA World Cup", "sportGroup": "Soccer", "espnPath": "soccer/fifa.world" },
+  { "sportKey": "soccer_usa_mls", "league": "MLS", "sportGroup": "Soccer", "espnPath": "soccer/usa.1" },
   { "sportKey": "baseball_wbc", "league": "World Baseball Classic", "sportGroup": "Baseball", "espnPath": "baseball/wbc" }
 ]
