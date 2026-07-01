@@ -14,13 +14,21 @@ const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 const DISPLAY_TZ = 'America/Puerto_Rico';
 
 const SPORT_GROUP_ORDER = ['Puerto Rico', 'Basketball', 'Baseball', 'Football', 'Hockey', 'Soccer'];
+// How often to re-poll for live status/score changes. ESPN-sourced games
+// carry real status (scheduled/live/final) and scores; Odds API-sourced
+// games don't (that endpoint only returns lines, not live state), so the
+// ticker below will only ever surface ESPN-backed games.
+const REFRESH_MS = 60 * 1000;
 
-init();
+refresh();
+setInterval(refresh, REFRESH_MS);
 
-async function init() {
+async function refresh() {
   let data = await loadFromServer();
   if (!data) data = await loadFromEspnFallback();
-  render(data.sections || []);
+  const sections = data.sections || [];
+  render(sections);
+  renderTicker(sections);
   const updated = document.getElementById('updated');
   if (updated && data.generatedAt) {
     updated.textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString()}`;
@@ -148,6 +156,10 @@ function normalizeEspnEvent(event, descriptor) {
       shortName: away?.team?.abbreviation || null,
       logo: away?.team?.logo || null,
     },
+    score:
+      home?.score != null || away?.score != null
+        ? { home: home?.score ?? null, away: away?.score ?? null }
+        : null,
     venue: competition?.venue?.fullName || null,
     isPuertoRico: false,
     odds: null,
@@ -225,6 +237,7 @@ function renderGameRow(game) {
     : 'TBD';
   const statusBadge =
     game.status === 'live' ? '<span class="game-status game-status--live">LIVE</span>' : game.status === 'final' ? '<span class="game-status">FINAL</span>' : `<span class="game-time">${escapeHtml(time)}</span>`;
+  const scoreLine = game.score ? `<div class="game-score">${formatScoreLine(game)}</div>` : '';
 
   return `
     <div class="game-row">
@@ -232,10 +245,49 @@ function renderGameRow(game) {
         <span class="team">${escapeHtml(game.awayTeam.name)}</span>
         <span class="at">@</span>
         <span class="team">${escapeHtml(game.homeTeam.name)}</span>
+        ${scoreLine}
       </div>
       <div class="game-meta">${statusBadge}</div>
       <div class="game-odds">${renderOdds(game.odds)}</div>
     </div>`;
+}
+
+function formatScoreLine(game) {
+  return `${escapeHtml(String(game.score.away ?? '—'))} - ${escapeHtml(String(game.score.home ?? '—'))}`;
+}
+
+// --- Live ticker: a scrolling banner of every game currently in progress ---
+// Only ESPN-sourced games carry real live status/scores (the Odds API's
+// basic odds endpoint doesn't include live state), so this will only ever
+// surface games from the ESPN path — the curated odds sections above always
+// show "scheduled" regardless of real-world game state.
+
+function renderTicker(sections) {
+  const ticker = document.getElementById('ticker');
+  const track = document.getElementById('tickerTrack');
+  if (!ticker || !track) return;
+
+  const liveGames = sections.flatMap((s) => s.games.filter((g) => g.status === 'live'));
+  if (!liveGames.length) {
+    ticker.hidden = true;
+    track.innerHTML = '';
+    return;
+  }
+
+  const items = liveGames.map(tickerItemHtml).join('');
+  // Duplicate the content so the CSS scroll animation can loop seamlessly
+  // from -50% back to 0 without a visible jump.
+  track.innerHTML = items + items;
+  ticker.hidden = false;
+}
+
+function tickerItemHtml(game) {
+  const score = game.score ? ` ${formatScoreLine(game)}` : '';
+  return `
+    <span class="ticker-item">
+      <span class="ticker-live-dot"></span>
+      ${escapeHtml(game.league)}: ${escapeHtml(game.awayTeam.name)} @ ${escapeHtml(game.homeTeam.name)}${score}
+    </span>`;
 }
 
 function renderOdds(odds) {

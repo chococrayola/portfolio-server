@@ -247,6 +247,10 @@ function normalizeEspnEvent(event, descriptor) {
             shortName: away?.team?.abbreviation || null,
             logo: away?.team?.logo || null,
         },
+        score:
+            home?.score != null || away?.score != null
+                ? { home: home?.score ?? null, away: away?.score ?? null }
+                : null,
         venue: competition?.venue?.fullName || null,
         isPuertoRico: false,
         odds: null,
