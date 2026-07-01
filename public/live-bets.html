@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1720" />
+  <title>Live Bets Today</title>
+  <meta name="description" content="Today's games across every sport, with Puerto Rico leagues like BSN pinned to the top when they're playing." />
+  <link rel="stylesheet" href="live-bets/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">🏆 Live Bets Today</span>
+    <span class="subtitle">Today's games across every sport — Puerto Rico first</span>
+    <span id="updated" class="updated"></span>
+  </header>
+
+  <main id="board">
+    <p id="loading" class="status-msg">Loading today's games…</p>
+    <p id="empty" class="status-msg" hidden>No games found for today. Check back later.</p>
+    <div id="sections"></div>
+  </main>
+
+  <script type="module" src="live-bets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+[
+  { "sportKey": "bsn", "league": "BSN (Baloncesto Superior Nacional)", "sportGroup": "Basketball", "espnPath": "basketball/bsn" },
+  { "sportKey": "lbprc", "league": "LBPRC (Béisbol Invernal)", "sportGroup": "Baseball", "espnPath": "baseball/lbprc" }
+]

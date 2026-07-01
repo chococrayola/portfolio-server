@@ -1,0 +1,9 @@
+[
+  { "sportKey": "americanfootball_nfl", "league": "NFL", "sportGroup": "Football", "espnPath": "football/nfl" },
+  { "sportKey": "basketball_nba", "league": "NBA", "sportGroup": "Basketball", "espnPath": "basketball/nba" },
+  { "sportKey": "basketball_wnba", "league": "WNBA", "sportGroup": "Basketball", "espnPath": "basketball/wnba" },
+  { "sportKey": "baseball_mlb", "league": "MLB", "sportGroup": "Baseball", "espnPath": "baseball/mlb" },
+  { "sportKey": "icehockey_nhl", "league": "NHL", "sportGroup": "Hockey", "espnPath": "hockey/nhl" },
+  { "sportKey": "soccer_epl", "league": "Premier League", "sportGroup": "Soccer", "espnPath": "soccer/eng.1" },
+  { "sportKey": "baseball_wbc", "league": "World Baseball Classic", "sportGroup": "Baseball", "espnPath": "baseball/wbc" }
+]
