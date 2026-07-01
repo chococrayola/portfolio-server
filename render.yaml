@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: portfolio-server
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: ODDS_API_KEY
+        sync: false

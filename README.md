@@ -33,3 +33,19 @@ server-side); if that route isn't reachable — e.g. when the site is served
 purely as static files (GitHub Pages) with no backend — it falls back to
 fetching free ESPN schedule data directly from the browser, so the page
 still works, just without betting lines.
+
+### Deploying the backend (for real odds)
+
+GitHub Pages only serves static files, so the `/api/live-bets` route (and
+real betting odds) require running `server.js` somewhere. A `render.yaml`
+Blueprint is included for a one-click deploy on [Render](https://render.com)
+(free tier):
+
+1. Get a free key at https://the-odds-api.com/.
+2. Go to https://dashboard.render.com/select-repo?type=blueprint, connect
+   this GitHub repo, and Render will read `render.yaml` automatically.
+3. When prompted for environment variables, fill in `EMAIL_USER`,
+   `EMAIL_PASS`, and `ODDS_API_KEY`.
+4. Deploy. You'll get a URL like `https://portfolio-server-xxxx.onrender.com`.
+   The free tier spins down after ~15 min idle, so the first request after
+   a period of inactivity takes 30-60s to wake up.

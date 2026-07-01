@@ -9,6 +9,14 @@
 // two paths can't drift out of sync. Either path produces the same
 // `sections[]` shape, so rendering never needs to know which source it got.
 
+// When this page is served from the same origin as the Express server
+// (running locally, or if server.js itself serves public/), a relative
+// fetch is enough. When it's served from GitHub Pages (a different origin
+// than wherever server.js is deployed, e.g. Render), a relative fetch to
+// "/api/live-bets" 404s against Pages itself — so BACKEND_BASE lets us also
+// try the real backend's absolute URL before giving up and falling back to
+// the keyless ESPN path. Leave this empty until a backend is deployed.
+const BACKEND_BASE = '';
 const API_ROUTE = '/api/live-bets';
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 const DISPLAY_TZ = 'America/Puerto_Rico';
@@ -36,16 +44,21 @@ async function refresh() {
 }
 
 async function loadFromServer() {
-  try {
-    const res = await fetch(API_ROUTE, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!Array.isArray(data.sections)) return null;
-    return data;
-  } catch (err) {
-    console.warn('live-bets: server route unavailable, falling back to ESPN —', err.message);
-    return null;
+  const candidates = [API_ROUTE];
+  if (BACKEND_BASE) candidates.push(`${BACKEND_BASE.replace(/\/$/, '')}${API_ROUTE}`);
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data.sections)) continue;
+      return data;
+    } catch (err) {
+      console.warn(`live-bets: ${url} unavailable —`, err.message);
+    }
   }
+  return null;
 }
 
 // --- Client-side ESPN-only fallback (no API key needed/possible here) ------
