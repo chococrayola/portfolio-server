@@ -27,9 +27,18 @@ const SPORT_GROUP_ORDER = ['Puerto Rico', 'Basketball', 'Baseball', 'Football', 
 // games don't (that endpoint only returns lines, not live state), so the
 // ticker below will only ever surface ESPN-backed games.
 const REFRESH_MS = 60 * 1000;
+// How often the "Top Bet" spotlight advances to the next candidate. This is
+// a separate, faster timer from REFRESH_MS: the data itself only changes on
+// each refresh, but cycling the displayed pick faster makes the widget feel
+// alive between refreshes and gives every close matchup a turn in view.
+const TOP_BET_ROTATE_MS = 5000;
+
+let topBetsPool = [];
+let topBetIndex = 0;
 
 refresh();
 setInterval(refresh, REFRESH_MS);
+setInterval(rotateTopBet, TOP_BET_ROTATE_MS);
 
 async function refresh() {
   let data = await loadFromServer();
@@ -37,6 +46,9 @@ async function refresh() {
   const sections = data.sections || [];
   render(sections);
   renderTicker(sections);
+  topBetsPool = computeTopBets(sections);
+  topBetIndex = 0;
+  renderTopBet();
   const updated = document.getElementById('updated');
   if (updated && data.generatedAt) {
     updated.textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString()}`;
@@ -73,13 +85,14 @@ async function loadFromEspnFallback() {
   const curatedResults = await Promise.all(
     (curatedSports || []).map(async (sport) => {
       const games = filterToday(await fetchEspnScoreboard(sport.espnPath, sport));
+      const oddsAvailable = games.some((g) => g.odds);
       return {
         sportKey: sport.sportKey,
         league: sport.league,
         sportGroup: sport.sportGroup,
         priority: false,
-        oddsAvailable: false,
-        status: games.length ? 'schedule-only' : 'unavailable',
+        oddsAvailable,
+        status: oddsAvailable ? 'ok' : games.length ? 'schedule-only' : 'unavailable',
         games,
       };
     })
@@ -175,8 +188,39 @@ function normalizeEspnEvent(event, descriptor) {
         : null,
     venue: competition?.venue?.fullName || null,
     isPuertoRico: false,
-    odds: null,
+    odds: extractEspnOdds(competition),
     source: 'espn',
+  };
+}
+
+// ESPN's own scoreboard feed embeds real sportsbook odds when a partner has
+// a line posted for that game (mainly NFL/NBA/MLB/NHL, before and during
+// play) — no separate paid API needed. Coverage isn't guaranteed for every
+// game/league, and this is unverified against live traffic since it can't
+// be tested from a network-restricted environment, so treat early results
+// as best-effort and sanity-check a game or two against a real sportsbook.
+// The spread's sign convention isn't verified either, so we surface it only
+// as ESPN's own pre-formatted "details" string rather than risk mislabeling
+// which side is favored.
+function extractEspnOdds(competition) {
+  const entry = competition?.odds?.[0];
+  if (!entry) return null;
+  const home = entry.homeTeamOdds || {};
+  const away = entry.awayTeamOdds || {};
+  const hasMoneyline = home.moneyLine != null || away.moneyLine != null;
+  const hasTotal = typeof entry.overUnder === 'number';
+  if (!hasMoneyline && !hasTotal && !entry.details) return null;
+  return {
+    bookmaker: entry.provider?.name || null,
+    summary: entry.details || null,
+    moneyline: hasMoneyline ? { home: home.moneyLine ?? null, away: away.moneyLine ?? null } : null,
+    spread: null,
+    total: hasTotal
+      ? {
+          over: { point: entry.overUnder, price: entry.overOdds ?? null },
+          under: { point: entry.overUnder, price: entry.underOdds ?? null },
+        }
+      : null,
   };
 }
 
@@ -211,7 +255,24 @@ function render(sections) {
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
 
-  container.innerHTML = ordered.map(renderSection).join('');
+  // Live games also get a spotlight rail up top, in addition to staying
+  // listed under their normal league section below — same pattern as the
+  // ticker (a summary view doesn't replace the full grouped list).
+  const liveGames = sections.flatMap((s) => s.games.filter((g) => g.status === 'live'));
+  const liveBlock = liveGames.length ? renderLiveSection(liveGames) : '';
+
+  container.innerHTML = liveBlock + ordered.map(renderSection).join('');
+}
+
+function renderLiveSection(games) {
+  return `
+    <section class="league-block league-block--live">
+      <div class="league-head">
+        <h2>🔴 Live Now</h2>
+        <span class="league-count">${games.length} game${games.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="league-games">${games.map(renderGameRow).join('')}</div>
+    </section>`;
 }
 
 function renderSection(section) {
@@ -303,9 +364,70 @@ function tickerItemHtml(game) {
     </span>`;
 }
 
+// --- Top Bets: a rotating spotlight of the most competitive real-odds ------
+// games right now. "Most competitive" is the closest we can get to "top" or
+// "trending" without any real betting-volume data (this isn't an actual
+// sportsbook) — it ranks by how close the two teams' implied win
+// probabilities are, live games first. Games without real odds (most of the
+// current ESPN-fallback coverage) simply aren't candidates.
+
+function computeTopBets(sections) {
+  const candidates = sections
+    .flatMap((s) => s.games)
+    .filter((g) => g.odds?.moneyline && g.odds.moneyline.home != null && g.odds.moneyline.away != null);
+
+  return candidates
+    .map((game) => ({
+      game,
+      closeness: Math.abs(
+        impliedProbability(game.odds.moneyline.home) - impliedProbability(game.odds.moneyline.away)
+      ),
+    }))
+    .sort((a, b) => {
+      const liveRank = (a.game.status === 'live' ? 0 : 1) - (b.game.status === 'live' ? 0 : 1);
+      return liveRank !== 0 ? liveRank : a.closeness - b.closeness;
+    })
+    .slice(0, 5)
+    .map((entry) => entry.game);
+}
+
+function impliedProbability(americanOdds) {
+  return americanOdds > 0 ? 100 / (americanOdds + 100) : -americanOdds / (-americanOdds + 100);
+}
+
+function rotateTopBet() {
+  if (!topBetsPool.length) return;
+  topBetIndex = (topBetIndex + 1) % topBetsPool.length;
+  renderTopBet();
+}
+
+function renderTopBet() {
+  const widget = document.getElementById('topBet');
+  const content = document.getElementById('topBetContent');
+  if (!widget || !content) return;
+
+  if (!topBetsPool.length) {
+    widget.hidden = true;
+    return;
+  }
+
+  const game = topBetsPool[topBetIndex % topBetsPool.length];
+  const liveTag = game.status === 'live' ? '<span class="game-status game-status--live">LIVE</span>' : '';
+  content.innerHTML = `
+    <span class="top-bet-league">${escapeHtml(game.league)}</span>
+    <span class="top-bet-teams">${escapeHtml(game.awayTeam.name)} @ ${escapeHtml(game.homeTeam.name)}</span>
+    ${liveTag}
+    <span class="top-bet-odds">${renderOdds(game.odds)}</span>
+    <span class="top-bet-index">${topBetIndex + 1}/${topBetsPool.length}</span>`;
+  widget.hidden = false;
+}
+
 function renderOdds(odds) {
   if (!odds) return '<span class="odds-pill odds-pill--muted">Odds N/A</span>';
   const parts = [];
+  if (odds.summary) {
+    parts.push(`<span class="odds-pill odds-pill--summary">${escapeHtml(odds.summary)}</span>`);
+  }
   if (odds.moneyline) {
     parts.push(oddsPill('ML', formatPrice(odds.moneyline.away), formatPrice(odds.moneyline.home)));
   }

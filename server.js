@@ -253,8 +253,36 @@ function normalizeEspnEvent(event, descriptor) {
                 : null,
         venue: competition?.venue?.fullName || null,
         isPuertoRico: false,
-        odds: null,
+        odds: extractEspnOdds(competition),
         source: 'espn',
+    };
+}
+
+// ESPN's own scoreboard feed embeds real sportsbook odds when a partner has
+// a line posted for that game (mainly NFL/NBA/MLB/NHL, before and during
+// play) — free, no key. Coverage isn't guaranteed for every game/league.
+// The spread's sign convention isn't verified against live traffic, so it's
+// surfaced only as ESPN's own pre-formatted "details" string rather than
+// risk mislabeling which side is favored.
+function extractEspnOdds(competition) {
+    const entry = competition?.odds?.[0];
+    if (!entry) return null;
+    const home = entry.homeTeamOdds || {};
+    const away = entry.awayTeamOdds || {};
+    const hasMoneyline = home.moneyLine != null || away.moneyLine != null;
+    const hasTotal = typeof entry.overUnder === 'number';
+    if (!hasMoneyline && !hasTotal && !entry.details) return null;
+    return {
+        bookmaker: entry.provider?.name || null,
+        summary: entry.details || null,
+        moneyline: hasMoneyline ? { home: home.moneyLine ?? null, away: away.moneyLine ?? null } : null,
+        spread: null,
+        total: hasTotal
+            ? {
+                  over: { point: entry.overUnder, price: entry.overOdds ?? null },
+                  under: { point: entry.overUnder, price: entry.underOdds ?? null },
+              }
+            : null,
     };
 }
 
@@ -310,7 +338,10 @@ app.get('/api/live-bets', async (req, res) => {
                 const backstop = await fetchEspnScoreboard(sport.espnPath, sport);
                 if (backstop.length) {
                     games = backstop;
-                    status = 'schedule-only';
+                    // ESPN's own feed sometimes embeds real odds too (see
+                    // extractEspnOdds) — reflect that instead of always
+                    // labeling this section "schedule only".
+                    status = backstop.some((g) => g.odds) ? 'ok' : 'schedule-only';
                 }
             }
 

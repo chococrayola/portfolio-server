@@ -138,6 +138,51 @@ main#board {
   box-shadow: 0 0 0 1px rgba(244, 185, 66, 0.25);
 }
 
+.league-block--live {
+  border-color: var(--down);
+  background: linear-gradient(180deg, rgba(255, 107, 107, 0.10), var(--panel) 40%);
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.25);
+}
+
+.top-bet {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: linear-gradient(90deg, rgba(244, 185, 66, 0.14), var(--panel));
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.top-bet-label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #0f1720;
+  background: var(--accent);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.top-bet-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+}
+.top-bet-league { font-size: 0.78rem; color: var(--muted); }
+.top-bet-teams { font-weight: 700; }
+.top-bet-odds { display: flex; gap: 6px; flex-wrap: wrap; }
+.top-bet-index {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.odds-pill--summary { color: var(--accent); font-weight: 700; }
+
 .league-head {
   display: flex;
   align-items: center;
