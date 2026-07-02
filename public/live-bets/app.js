@@ -229,10 +229,17 @@ function extractEspnOdds(competition) {
 function buildEspnSpread(entry, home, away) {
   const magnitude = typeof entry.spread === 'number' ? Math.abs(entry.spread) : null;
   if (magnitude === null) return null;
-  if (home.favorite === away.favorite) return null; // ambiguous/missing flags — don't guess
+  // Require exactly one side to be *explicitly* true. A plain `===`
+  // comparison would miss asymmetric shapes like { favorite: false } vs
+  // an absent field (false !== undefined), which would otherwise let both
+  // sides fall through as "not favorite" and produce an invalid
+  // double-positive spread.
+  const homeIsFavorite = home.favorite === true;
+  const awayIsFavorite = away.favorite === true;
+  if (homeIsFavorite === awayIsFavorite) return null; // neither or both — ambiguous, don't guess
   return {
-    home: { point: home.favorite ? -magnitude : magnitude, price: home.spreadOdds ?? null },
-    away: { point: away.favorite ? -magnitude : magnitude, price: away.spreadOdds ?? null },
+    home: { point: homeIsFavorite ? -magnitude : magnitude, price: home.spreadOdds ?? null },
+    away: { point: awayIsFavorite ? -magnitude : magnitude, price: away.spreadOdds ?? null },
   };
 }
 
@@ -410,7 +417,11 @@ function computeDemoPlayerProps(sections) {
     .sort((a, b) => {
       const liveRank = (a.status === 'live' ? 0 : 1) - (b.status === 'live' ? 0 : 1);
       if (liveRank !== 0) return liveRank;
-      return new Date(a.startTime || 0) - new Date(b.startTime || 0);
+      // A missing startTime should sort last, not first (new Date(0) would
+      // otherwise rank it as "already started" ahead of real games).
+      const aTime = a.startTime ? new Date(a.startTime).getTime() : Infinity;
+      const bTime = b.startTime ? new Date(b.startTime).getTime() : Infinity;
+      return aTime - bTime;
     })
     .slice(0, 3);
 
@@ -432,10 +443,16 @@ function computeDemoPlayerProps(sections) {
   });
 }
 
+// Real O/U lines are almost always set at a half-point specifically to
+// avoid a push (tie), so force that here — a whole-number line would be an
+// obvious tell that this is synthetic data, undermining the whole point of
+// a look-alike demo.
 function randomLine(rand, template) {
   const step = template.step || 1;
   const raw = template.min + rand() * (template.max - template.min);
-  return Number((Math.round(raw / step) * step).toFixed(1));
+  const stepped = Math.round(raw / step) * step;
+  const rounded = Number(stepped.toFixed(1));
+  return Number.isInteger(rounded) ? rounded + 0.5 : rounded;
 }
 
 // Deterministic PRNG seeded from a string (sfc32-style mix), so the same

@@ -290,10 +290,17 @@ function extractEspnOdds(competition) {
 function buildEspnSpread(entry, home, away) {
     const magnitude = typeof entry.spread === 'number' ? Math.abs(entry.spread) : null;
     if (magnitude === null) return null;
-    if (home.favorite === away.favorite) return null; // ambiguous/missing flags — don't guess
+    // Require exactly one side to be *explicitly* true. A plain `===`
+    // comparison would miss asymmetric shapes like { favorite: false } vs
+    // an absent field (false !== undefined), which would otherwise let both
+    // sides fall through as "not favorite" and produce an invalid
+    // double-positive spread.
+    const homeIsFavorite = home.favorite === true;
+    const awayIsFavorite = away.favorite === true;
+    if (homeIsFavorite === awayIsFavorite) return null; // neither or both — ambiguous, don't guess
     return {
-        home: { point: home.favorite ? -magnitude : magnitude, price: home.spreadOdds ?? null },
-        away: { point: away.favorite ? -magnitude : magnitude, price: away.spreadOdds ?? null },
+        home: { point: homeIsFavorite ? -magnitude : magnitude, price: home.spreadOdds ?? null },
+        away: { point: awayIsFavorite ? -magnitude : magnitude, price: away.spreadOdds ?? null },
     };
 }
 
