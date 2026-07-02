@@ -156,6 +156,7 @@ body::before {
   border: 1px solid var(--down);
   padding: 2px 9px;
   text-shadow: 0 0 8px rgba(255, 61, 104, 0.6);
+  filter: drop-shadow(0 0 5px rgba(255, 61, 104, 0.4));
 }
 .ticker-viewport {
   flex: 1 1 auto;
@@ -201,10 +202,6 @@ body::before {
   font-weight: 700;
   font-family: var(--mono);
   margin-left: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track, .top-bet::after, .ticker-live-dot, .game-status--live { animation: none; }
 }
 
 main#board {
@@ -269,11 +266,11 @@ main#board {
   gap: 12px;
   flex-wrap: wrap;
   background:
-    linear-gradient(135deg, rgba(245, 205, 107, 0.16), var(--panel) 60%),
-    linear-gradient(var(--neon), var(--neon)) top left / 2px 20px no-repeat,
-    linear-gradient(var(--neon), var(--neon)) top left / 20px 2px no-repeat,
-    linear-gradient(var(--neon), var(--neon)) bottom right / 2px 20px no-repeat,
-    linear-gradient(var(--neon), var(--neon)) bottom right / 20px 2px no-repeat;
+    linear-gradient(var(--neon), var(--neon)) left 10px top 10px / 2px 18px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) left 10px top 10px / 18px 2px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) right 10px bottom 10px / 2px 18px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) right 10px bottom 10px / 18px 2px no-repeat,
+    linear-gradient(135deg, rgba(245, 205, 107, 0.16), var(--panel) 60%);
   background-repeat: no-repeat;
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
@@ -310,7 +307,8 @@ main#board {
   color: #1a1305;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
   padding: 4px 10px;
-  box-shadow: 0 0 14px rgba(245, 205, 107, 0.5);
+  /* drop-shadow, not box-shadow: the shared clip-path clips box-shadows away */
+  filter: drop-shadow(0 0 7px rgba(245, 205, 107, 0.5));
 }
 .top-bet-content {
   position: relative;
@@ -356,7 +354,7 @@ main#board {
   color: #1a1305;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
   padding: 2px 9px;
-  box-shadow: 0 0 12px rgba(245, 205, 107, 0.45);
+  filter: drop-shadow(0 0 6px rgba(245, 205, 107, 0.45));
 }
 .league-count {
   margin-left: auto;
@@ -471,8 +469,8 @@ main#board {
   animation: live-badge-pulse 1.6s ease-in-out infinite;
 }
 @keyframes live-badge-pulse {
-  0%, 100% { box-shadow: 0 0 6px rgba(255, 61, 104, 0.5); }
-  50% { box-shadow: 0 0 16px rgba(255, 61, 104, 0.9); }
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 61, 104, 0.5)); }
+  50% { filter: drop-shadow(0 0 8px rgba(255, 61, 104, 0.9)); }
 }
 
 .game-odds {
@@ -513,4 +511,10 @@ main#board {
 @media (max-width: 520px) {
   .game-odds { justify-content: flex-start; width: 100%; }
   .league-count { margin-left: 0; }
+}
+
+/* Kept at the end of the file on purpose: media queries add no specificity,
+   so this only beats the animation rules above it by source order. */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track, .top-bet::after, .ticker-live-dot, .game-status--live, .topbar .updated::before { animation: none; }
 }
