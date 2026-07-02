@@ -92,6 +92,12 @@ body::before {
   font-family: var(--mono);
 }
 
+/* `display: flex` on the element itself beats the browser's own
+   `[hidden] { display: none }` rule (author styles always win over
+   user-agent styles regardless of specificity), so app.js setting
+   `ticker.hidden = true` would otherwise silently do nothing. */
+.ticker[hidden] { display: none; }
+
 .ticker {
   position: sticky;
   top: 54px;
@@ -219,6 +225,9 @@ main#board {
 }
 
 /* --- Top Bet: the marquee luxury element, gold edge + shimmer sweep --- */
+/* Same [hidden] override rationale as .ticker above. */
+.top-bet[hidden] { display: none; }
+
 .top-bet {
   position: relative;
   display: flex;
