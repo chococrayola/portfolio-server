@@ -64,11 +64,21 @@ body::before {
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 0 rgba(245, 205, 107, 0.14), 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: baseline;
   gap: 12px;
   flex-wrap: wrap;
+}
+/* Two-tone gold-to-cyan hairline, replacing a flat accent border */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold) 25%, var(--neon) 75%, transparent);
 }
 .topbar .brand {
   font-size: 1.2rem;
@@ -78,6 +88,7 @@ body::before {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  text-shadow: 0 0 18px rgba(245, 205, 107, 0.35);
 }
 .topbar .subtitle {
   font-size: 0.85rem;
@@ -90,6 +101,23 @@ body::before {
   font-size: 0.75rem;
   color: var(--muted);
   font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar .updated::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon);
+  box-shadow: 0 0 6px rgba(94, 234, 212, 0.85);
+  animation: status-pulse 2.2s ease-out infinite;
+}
+@keyframes status-pulse {
+  0% { box-shadow: 0 0 6px rgba(94, 234, 212, 0.85), 0 0 0 0 rgba(94, 234, 212, 0.5); }
+  70% { box-shadow: 0 0 6px rgba(94, 234, 212, 0.85), 0 0 0 6px rgba(94, 234, 212, 0); }
+  100% { box-shadow: 0 0 6px rgba(94, 234, 212, 0.85), 0 0 0 0 rgba(94, 234, 212, 0); }
 }
 
 /* `display: flex` on the element itself beats the browser's own
@@ -111,6 +139,13 @@ body::before {
   padding: 7px 0;
   overflow: hidden;
 }
+/* Angular cut-corner tag shape, shared by all badge/label chips — a sharper,
+   more "HUD readout" silhouette than a fully-rounded pill. */
+.ticker-label, .priority-badge, .demo-badge, .game-status, .top-bet-label {
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  border-radius: 0;
+}
+
 .ticker-label {
   flex: 0 0 auto;
   margin-left: 14px;
@@ -119,7 +154,6 @@ body::before {
   letter-spacing: 0.06em;
   color: var(--down);
   border: 1px solid var(--down);
-  border-radius: 999px;
   padding: 2px 9px;
   text-shadow: 0 0 8px rgba(255, 61, 104, 0.6);
 }
@@ -234,7 +268,13 @@ main#board {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  background: linear-gradient(135deg, rgba(245, 205, 107, 0.16), var(--panel) 60%);
+  background:
+    linear-gradient(135deg, rgba(245, 205, 107, 0.16), var(--panel) 60%),
+    linear-gradient(var(--neon), var(--neon)) top left / 2px 20px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) top left / 20px 2px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) bottom right / 2px 20px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) bottom right / 20px 2px no-repeat;
+  background-repeat: no-repeat;
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid rgba(245, 205, 107, 0.55);
@@ -270,7 +310,6 @@ main#board {
   color: #1a1305;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
   padding: 4px 10px;
-  border-radius: 999px;
   box-shadow: 0 0 14px rgba(245, 205, 107, 0.5);
 }
 .top-bet-content {
@@ -297,7 +336,9 @@ main#board {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .league-head h2 {
   font-size: 0.95rem;
@@ -315,7 +356,6 @@ main#board {
   color: #1a1305;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
   padding: 2px 9px;
-  border-radius: 999px;
   box-shadow: 0 0 12px rgba(245, 205, 107, 0.45);
 }
 .league-count {
@@ -361,7 +401,6 @@ main#board {
   color: var(--bg);
   background: var(--muted);
   padding: 2px 9px;
-  border-radius: 999px;
 }
 .league-note--demo {
   position: relative;
@@ -423,7 +462,6 @@ main#board {
   letter-spacing: 0.04em;
   color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 999px;
   padding: 2px 9px;
 }
 .game-status--live {
@@ -448,7 +486,8 @@ main#board {
 .odds-pill {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-left: 2px solid rgba(245, 205, 107, 0.45);
+  border-radius: 6px;
   padding: 4px 9px;
   font-size: 0.78rem;
   font-family: var(--mono);
@@ -460,7 +499,7 @@ main#board {
   border-color: rgba(245, 205, 107, 0.5);
   box-shadow: 0 0 12px rgba(245, 205, 107, 0.25);
 }
-.odds-pill--muted { color: var(--muted); }
+.odds-pill--muted { color: var(--muted); border-left-color: var(--line); }
 .odds-label {
   color: var(--gold);
   font-weight: 700;
