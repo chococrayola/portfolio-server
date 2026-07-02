@@ -39,6 +39,82 @@ let topBetIndex = 0;
 refresh();
 setInterval(refresh, REFRESH_MS);
 setInterval(rotateTopBet, TOP_BET_ROTATE_MS);
+initTilt();
+
+// --- 3D tilt + depth parallax ----------------------------------------------
+// Cards tilt toward the cursor with a moving specular highlight, and the
+// fixed background layers shift slightly with pointer/scroll so the page
+// reads as layered Z-space. All communication with CSS goes through custom
+// properties, and all listeners are delegated to document/window: render()
+// replaces #sections innerHTML every refresh (and the top-bet content every
+// rotation), so per-card listeners would be wiped constantly.
+function initTilt() {
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  if (!fine.matches || reduced.matches) return; // touch devices / reduced motion: no 3D
+
+  const MAX_TILT_DEG = 4;
+  let activeCard = null;
+  let pendingFrame = 0;
+  let pointerX = 0;
+  let pointerY = 0;
+
+  function clearCard(card) {
+    if (!card) return;
+    card.style.removeProperty('--rx');
+    card.style.removeProperty('--ry');
+    card.style.removeProperty('--mx');
+    card.style.removeProperty('--my');
+    card.classList.remove('is-tilting');
+  }
+
+  function applyFrame() {
+    pendingFrame = 0;
+
+    // Background parallax from normalized pointer position (-1..1).
+    const nx = (pointerX / innerWidth) * 2 - 1;
+    const ny = (pointerY / innerHeight) * 2 - 1;
+    document.documentElement.style.setProperty('--par-x', nx.toFixed(3));
+    document.documentElement.style.setProperty('--par-y', ny.toFixed(3));
+
+    if (!activeCard) return;
+    const rect = activeCard.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const px = (pointerX - rect.left) / rect.width; // 0..1 across the card
+    const py = (pointerY - rect.top) / rect.height;
+    const ry = (px - 0.5) * 2 * MAX_TILT_DEG; // right edge tilts toward viewer
+    const rx = (0.5 - py) * 2 * MAX_TILT_DEG; // top edge tilts toward viewer
+    activeCard.style.setProperty('--rx', `${rx.toFixed(2)}deg`);
+    activeCard.style.setProperty('--ry', `${ry.toFixed(2)}deg`);
+    activeCard.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`);
+    activeCard.style.setProperty('--my', `${(py * 100).toFixed(1)}%`);
+    activeCard.classList.add('is-tilting');
+  }
+
+  document.addEventListener('pointermove', (e) => {
+    pointerX = e.clientX;
+    pointerY = e.clientY;
+    const card = e.target.closest?.('.league-block, .top-bet') || null;
+    if (card !== activeCard) {
+      clearCard(activeCard);
+      activeCard = card;
+    }
+    if (!pendingFrame) pendingFrame = requestAnimationFrame(applyFrame);
+  });
+
+  document.addEventListener('pointerleave', () => {
+    clearCard(activeCard);
+    activeCard = null;
+  });
+
+  addEventListener(
+    'scroll',
+    () => {
+      document.documentElement.style.setProperty('--par-scroll', String(scrollY.toFixed ? scrollY.toFixed(0) : scrollY));
+    },
+    { passive: true }
+  );
+}
 
 async function refresh() {
   let data = await loadFromServer();
