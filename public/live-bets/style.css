@@ -215,6 +215,41 @@ main#board {
   margin: 6px 0;
 }
 
+.league-block--demo {
+  border-style: dashed;
+  border-color: var(--muted);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--panel),
+    var(--panel) 10px,
+    var(--panel-2) 10px,
+    var(--panel-2) 20px
+  );
+}
+.demo-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--bg);
+  background: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.league-note--demo {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 600;
+}
+.prop-game { margin-bottom: 10px; }
+.prop-game:last-child { margin-bottom: 0; }
+.prop-game-header {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.prop-game .game-row { margin-bottom: 6px; }
+.prop-game .game-row:last-child { margin-bottom: 0; }
+
 .league-games {
   display: flex;
   flex-direction: column;

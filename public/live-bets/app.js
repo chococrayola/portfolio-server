@@ -199,9 +199,6 @@ function normalizeEspnEvent(event, descriptor) {
 // game/league, and this is unverified against live traffic since it can't
 // be tested from a network-restricted environment, so treat early results
 // as best-effort and sanity-check a game or two against a real sportsbook.
-// The spread's sign convention isn't verified either, so we surface it only
-// as ESPN's own pre-formatted "details" string rather than risk mislabeling
-// which side is favored.
 function extractEspnOdds(competition) {
   const entry = competition?.odds?.[0];
   if (!entry) return null;
@@ -209,18 +206,33 @@ function extractEspnOdds(competition) {
   const away = entry.awayTeamOdds || {};
   const hasMoneyline = home.moneyLine != null || away.moneyLine != null;
   const hasTotal = typeof entry.overUnder === 'number';
-  if (!hasMoneyline && !hasTotal && !entry.details) return null;
+  const spread = buildEspnSpread(entry, home, away);
+  if (!hasMoneyline && !hasTotal && !spread && !entry.details) return null;
   return {
     bookmaker: entry.provider?.name || null,
     summary: entry.details || null,
     moneyline: hasMoneyline ? { home: home.moneyLine ?? null, away: away.moneyLine ?? null } : null,
-    spread: null,
+    spread,
     total: hasTotal
       ? {
           over: { point: entry.overUnder, price: entry.overOdds ?? null },
           under: { point: entry.overUnder, price: entry.underOdds ?? null },
         }
       : null,
+  };
+}
+
+// ESPN tags each side with favorite/underdog booleans, which lets us assign
+// the spread's sign deterministically (favorite is always negative) instead
+// of guessing based on home/away — unlike a blind home/away assumption,
+// this holds regardless of which side is actually favored.
+function buildEspnSpread(entry, home, away) {
+  const magnitude = typeof entry.spread === 'number' ? Math.abs(entry.spread) : null;
+  if (magnitude === null) return null;
+  if (home.favorite === away.favorite) return null; // ambiguous/missing flags — don't guess
+  return {
+    home: { point: home.favorite ? -magnitude : magnitude, price: home.spreadOdds ?? null },
+    away: { point: away.favorite ? -magnitude : magnitude, price: away.spreadOdds ?? null },
   };
 }
 
@@ -260,8 +272,9 @@ function render(sections) {
   // ticker (a summary view doesn't replace the full grouped list).
   const liveGames = sections.flatMap((s) => s.games.filter((g) => g.status === 'live'));
   const liveBlock = liveGames.length ? renderLiveSection(liveGames) : '';
+  const propsBlock = renderPlayerPropsSection(computeDemoPlayerProps(sections));
 
-  container.innerHTML = liveBlock + ordered.map(renderSection).join('');
+  container.innerHTML = liveBlock + ordered.map(renderSection).join('') + propsBlock;
 }
 
 function renderLiveSection(games) {
@@ -362,6 +375,119 @@ function tickerItemHtml(game) {
       <span class="ticker-live-dot"></span>
       ${escapeHtml(game.league)}: ${escapeHtml(game.awayTeam.name)} @ ${escapeHtml(game.homeTeam.name)}${score}
     </span>`;
+}
+
+// --- Player Props (DEMO DATA ONLY) ------------------------------------------
+// There is no free source for real player props: ESPN's public feed doesn't
+// expose them, and The Odds API only includes them on its $99/month
+// Business tier. This generates clearly-labeled, obviously-synthetic sample
+// props (generic "Top Performer" labels, never real athlete names) so the
+// section shows the intended design without pretending to be real data.
+// Numbers are seeded from the game id so they stay stable across refreshes
+// instead of flickering to new fake values every poll.
+
+const PROP_TEMPLATES = {
+  Basketball: [
+    { label: 'Points', min: 14, max: 32 },
+    { label: 'Rebounds', min: 4, max: 12 },
+  ],
+  Baseball: [
+    { label: 'Total Bases', min: 0.5, max: 2.5, step: 0.5 },
+    { label: 'Strikeouts', min: 3, max: 8 },
+  ],
+  Football: [
+    { label: 'Passing Yards', min: 200, max: 320 },
+    { label: 'Receiving Yards', min: 40, max: 100 },
+  ],
+  Hockey: [{ label: 'Shots on Goal', min: 2, max: 6 }],
+  Soccer: [{ label: 'Shots on Target', min: 1, max: 4 }],
+};
+const DEFAULT_PROP_TEMPLATES = [{ label: 'Points', min: 10, max: 25 }];
+
+function computeDemoPlayerProps(sections) {
+  const games = sections
+    .flatMap((s) => s.games)
+    .sort((a, b) => {
+      const liveRank = (a.status === 'live' ? 0 : 1) - (b.status === 'live' ? 0 : 1);
+      if (liveRank !== 0) return liveRank;
+      return new Date(a.startTime || 0) - new Date(b.startTime || 0);
+    })
+    .slice(0, 3);
+
+  return games.map((game) => {
+    const rand = seededRandom(game.id);
+    const templates = PROP_TEMPLATES[game.sportGroup] || DEFAULT_PROP_TEMPLATES;
+    const sides = [
+      { team: game.awayTeam, template: templates[0] },
+      { team: game.homeTeam, template: templates[1 % templates.length] },
+    ];
+    const props = sides.map(({ team, template }) => ({
+      playerLabel: `${team.shortName || team.name} Top Performer`,
+      propLabel: template.label,
+      line: randomLine(rand, template),
+      overPrice: -110 - Math.floor(rand() * 3) * 5,
+      underPrice: -110 - Math.floor(rand() * 3) * 5,
+    }));
+    return { game, props };
+  });
+}
+
+function randomLine(rand, template) {
+  const step = template.step || 1;
+  const raw = template.min + rand() * (template.max - template.min);
+  return Number((Math.round(raw / step) * step).toFixed(1));
+}
+
+// Deterministic PRNG seeded from a string (sfc32-style mix), so the same
+// game id always produces the same "random" sequence.
+function seededRandom(seedStr) {
+  let h = 1779033703 ^ seedStr.length;
+  for (let i = 0; i < seedStr.length; i++) {
+    h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  let seed = h >>> 0;
+  return function next() {
+    seed = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    seed ^= seed + Math.imul(seed ^ (seed >>> 7), seed | 61);
+    return ((seed ^ (seed >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function renderPlayerPropsSection(propsGames) {
+  if (!propsGames.length) return '';
+  return `
+    <section class="league-block league-block--demo">
+      <div class="league-head">
+        <h2>🎯 Player Props</h2>
+        <span class="demo-badge">DEMO</span>
+      </div>
+      <p class="league-note league-note--demo">
+        ⚠️ Sample data for demonstration only — not real odds or real player stats.
+      </p>
+      <div class="league-games">${propsGames.map(renderPropGameBlock).join('')}</div>
+    </section>`;
+}
+
+function renderPropGameBlock({ game, props }) {
+  return `
+    <div class="prop-game">
+      <div class="prop-game-header">${escapeHtml(game.league)}: ${escapeHtml(game.awayTeam.name)} @ ${escapeHtml(game.homeTeam.name)}</div>
+      ${props.map(renderPropRow).join('')}
+    </div>`;
+}
+
+function renderPropRow(prop) {
+  const overText = `O ${prop.line} (${formatPrice(prop.overPrice)})`;
+  const underText = `U ${prop.line} (${formatPrice(prop.underPrice)})`;
+  return `
+    <div class="game-row">
+      <div class="game-teams">
+        <span class="team">${escapeHtml(prop.playerLabel)}</span>
+        <span class="at">${escapeHtml(prop.propLabel)}</span>
+      </div>
+      <div class="game-odds">${oddsPill('O/U', overText, underText)}</div>
+    </div>`;
 }
 
 // --- Top Bets: a rotating spotlight of the most competitive real-odds ------

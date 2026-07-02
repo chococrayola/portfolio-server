@@ -261,9 +261,6 @@ function normalizeEspnEvent(event, descriptor) {
 // ESPN's own scoreboard feed embeds real sportsbook odds when a partner has
 // a line posted for that game (mainly NFL/NBA/MLB/NHL, before and during
 // play) — free, no key. Coverage isn't guaranteed for every game/league.
-// The spread's sign convention isn't verified against live traffic, so it's
-// surfaced only as ESPN's own pre-formatted "details" string rather than
-// risk mislabeling which side is favored.
 function extractEspnOdds(competition) {
     const entry = competition?.odds?.[0];
     if (!entry) return null;
@@ -271,18 +268,32 @@ function extractEspnOdds(competition) {
     const away = entry.awayTeamOdds || {};
     const hasMoneyline = home.moneyLine != null || away.moneyLine != null;
     const hasTotal = typeof entry.overUnder === 'number';
-    if (!hasMoneyline && !hasTotal && !entry.details) return null;
+    const spread = buildEspnSpread(entry, home, away);
+    if (!hasMoneyline && !hasTotal && !spread && !entry.details) return null;
     return {
         bookmaker: entry.provider?.name || null,
         summary: entry.details || null,
         moneyline: hasMoneyline ? { home: home.moneyLine ?? null, away: away.moneyLine ?? null } : null,
-        spread: null,
+        spread,
         total: hasTotal
             ? {
                   over: { point: entry.overUnder, price: entry.overOdds ?? null },
                   under: { point: entry.overUnder, price: entry.underOdds ?? null },
               }
             : null,
+    };
+}
+
+// ESPN tags each side with favorite/underdog booleans, which lets us assign
+// the spread's sign deterministically (favorite is always negative) instead
+// of guessing based on home/away.
+function buildEspnSpread(entry, home, away) {
+    const magnitude = typeof entry.spread === 'number' ? Math.abs(entry.spread) : null;
+    if (magnitude === null) return null;
+    if (home.favorite === away.favorite) return null; // ambiguous/missing flags — don't guess
+    return {
+        home: { point: home.favorite ? -magnitude : magnitude, price: home.spreadOdds ?? null },
+        away: { point: away.favorite ? -magnitude : magnitude, price: away.spreadOdds ?? null },
     };
 }
 
