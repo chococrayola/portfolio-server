@@ -64,11 +64,21 @@ body::before {
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 0 rgba(245, 205, 107, 0.14), 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: baseline;
   gap: 12px;
   flex-wrap: wrap;
+}
+/* Two-tone gold-to-cyan hairline, replacing a flat accent border */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold) 25%, var(--neon) 75%, transparent);
 }
 .topbar .brand {
   font-size: 1.2rem;
@@ -78,6 +88,7 @@ body::before {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  text-shadow: 0 0 18px rgba(245, 205, 107, 0.35);
 }
 .topbar .subtitle {
   font-size: 0.85rem;
@@ -90,7 +101,30 @@ body::before {
   font-size: 0.75rem;
   color: var(--muted);
   font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.topbar .updated::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon);
+  box-shadow: 0 0 6px rgba(94, 234, 212, 0.85);
+  animation: status-pulse 2.2s ease-out infinite;
+}
+@keyframes status-pulse {
+  0% { box-shadow: 0 0 6px rgba(94, 234, 212, 0.85), 0 0 0 0 rgba(94, 234, 212, 0.5); }
+  70% { box-shadow: 0 0 6px rgba(94, 234, 212, 0.85), 0 0 0 6px rgba(94, 234, 212, 0); }
+  100% { box-shadow: 0 0 6px rgba(94, 234, 212, 0.85), 0 0 0 0 rgba(94, 234, 212, 0); }
+}
+
+/* `display: flex` on the element itself beats the browser's own
+   `[hidden] { display: none }` rule (author styles always win over
+   user-agent styles regardless of specificity), so app.js setting
+   `ticker.hidden = true` would otherwise silently do nothing. */
+.ticker[hidden] { display: none; }
 
 .ticker {
   position: sticky;
@@ -105,6 +139,13 @@ body::before {
   padding: 7px 0;
   overflow: hidden;
 }
+/* Angular cut-corner tag shape, shared by all badge/label chips — a sharper,
+   more "HUD readout" silhouette than a fully-rounded pill. */
+.ticker-label, .priority-badge, .demo-badge, .game-status, .top-bet-label {
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  border-radius: 0;
+}
+
 .ticker-label {
   flex: 0 0 auto;
   margin-left: 14px;
@@ -113,9 +154,9 @@ body::before {
   letter-spacing: 0.06em;
   color: var(--down);
   border: 1px solid var(--down);
-  border-radius: 999px;
   padding: 2px 9px;
   text-shadow: 0 0 8px rgba(255, 61, 104, 0.6);
+  filter: drop-shadow(0 0 5px rgba(255, 61, 104, 0.4));
 }
 .ticker-viewport {
   flex: 1 1 auto;
@@ -161,10 +202,6 @@ body::before {
   font-weight: 700;
   font-family: var(--mono);
   margin-left: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track, .top-bet::after, .ticker-live-dot, .game-status--live { animation: none; }
 }
 
 main#board {
@@ -219,13 +256,22 @@ main#board {
 }
 
 /* --- Top Bet: the marquee luxury element, gold edge + shimmer sweep --- */
+/* Same [hidden] override rationale as .ticker above. */
+.top-bet[hidden] { display: none; }
+
 .top-bet {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  background: linear-gradient(135deg, rgba(245, 205, 107, 0.16), var(--panel) 60%);
+  background:
+    linear-gradient(var(--neon), var(--neon)) left 10px top 10px / 2px 18px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) left 10px top 10px / 18px 2px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) right 10px bottom 10px / 2px 18px no-repeat,
+    linear-gradient(var(--neon), var(--neon)) right 10px bottom 10px / 18px 2px no-repeat,
+    linear-gradient(135deg, rgba(245, 205, 107, 0.16), var(--panel) 60%);
+  background-repeat: no-repeat;
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid rgba(245, 205, 107, 0.55);
@@ -261,8 +307,8 @@ main#board {
   color: #1a1305;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
   padding: 4px 10px;
-  border-radius: 999px;
-  box-shadow: 0 0 14px rgba(245, 205, 107, 0.5);
+  /* drop-shadow, not box-shadow: the shared clip-path clips box-shadows away */
+  filter: drop-shadow(0 0 7px rgba(245, 205, 107, 0.5));
 }
 .top-bet-content {
   position: relative;
@@ -288,7 +334,9 @@ main#board {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .league-head h2 {
   font-size: 0.95rem;
@@ -306,8 +354,7 @@ main#board {
   color: #1a1305;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
   padding: 2px 9px;
-  border-radius: 999px;
-  box-shadow: 0 0 12px rgba(245, 205, 107, 0.45);
+  filter: drop-shadow(0 0 6px rgba(245, 205, 107, 0.45));
 }
 .league-count {
   margin-left: auto;
@@ -352,7 +399,6 @@ main#board {
   color: var(--bg);
   background: var(--muted);
   padding: 2px 9px;
-  border-radius: 999px;
 }
 .league-note--demo {
   position: relative;
@@ -414,7 +460,6 @@ main#board {
   letter-spacing: 0.04em;
   color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 999px;
   padding: 2px 9px;
 }
 .game-status--live {
@@ -424,8 +469,8 @@ main#board {
   animation: live-badge-pulse 1.6s ease-in-out infinite;
 }
 @keyframes live-badge-pulse {
-  0%, 100% { box-shadow: 0 0 6px rgba(255, 61, 104, 0.5); }
-  50% { box-shadow: 0 0 16px rgba(255, 61, 104, 0.9); }
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 61, 104, 0.5)); }
+  50% { filter: drop-shadow(0 0 8px rgba(255, 61, 104, 0.9)); }
 }
 
 .game-odds {
@@ -439,7 +484,8 @@ main#board {
 .odds-pill {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-left: 2px solid rgba(245, 205, 107, 0.45);
+  border-radius: 6px;
   padding: 4px 9px;
   font-size: 0.78rem;
   font-family: var(--mono);
@@ -451,7 +497,7 @@ main#board {
   border-color: rgba(245, 205, 107, 0.5);
   box-shadow: 0 0 12px rgba(245, 205, 107, 0.25);
 }
-.odds-pill--muted { color: var(--muted); }
+.odds-pill--muted { color: var(--muted); border-left-color: var(--line); }
 .odds-label {
   color: var(--gold);
   font-weight: 700;
@@ -465,4 +511,10 @@ main#board {
 @media (max-width: 520px) {
   .game-odds { justify-content: flex-start; width: 100%; }
   .league-count { margin-left: 0; }
+}
+
+/* Kept at the end of the file on purpose: media queries add no specificity,
+   so this only beats the animation rules above it by source order. */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track, .top-bet::after, .ticker-live-dot, .game-status--live, .topbar .updated::before { animation: none; }
 }

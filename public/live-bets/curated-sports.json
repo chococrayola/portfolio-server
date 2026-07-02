@@ -1,11 +1,21 @@
 [
   { "sportKey": "americanfootball_nfl", "league": "NFL", "sportGroup": "Football", "espnPath": "football/nfl" },
+  { "sportKey": "americanfootball_ncaaf", "league": "NCAA Football", "sportGroup": "Football", "espnPath": "football/college-football" },
   { "sportKey": "basketball_nba", "league": "NBA", "sportGroup": "Basketball", "espnPath": "basketball/nba" },
   { "sportKey": "basketball_wnba", "league": "WNBA", "sportGroup": "Basketball", "espnPath": "basketball/wnba" },
+  { "sportKey": "basketball_ncaab", "league": "NCAA Men's Basketball", "sportGroup": "Basketball", "espnPath": "basketball/mens-college-basketball" },
+  { "sportKey": "basketball_wncaab", "league": "NCAA Women's Basketball", "sportGroup": "Basketball", "espnPath": "basketball/womens-college-basketball" },
   { "sportKey": "baseball_mlb", "league": "MLB", "sportGroup": "Baseball", "espnPath": "baseball/mlb" },
+  { "sportKey": "baseball_wbc", "league": "World Baseball Classic", "sportGroup": "Baseball", "espnPath": "baseball/wbc" },
   { "sportKey": "icehockey_nhl", "league": "NHL", "sportGroup": "Hockey", "espnPath": "hockey/nhl" },
   { "sportKey": "soccer_epl", "league": "Premier League", "sportGroup": "Soccer", "espnPath": "soccer/eng.1" },
-  { "sportKey": "soccer_fifa_world_cup", "league": "FIFA World Cup", "sportGroup": "Soccer", "espnPath": "soccer/fifa.world" },
+  { "sportKey": "soccer_spain_la_liga", "league": "La Liga", "sportGroup": "Soccer", "espnPath": "soccer/esp.1" },
+  { "sportKey": "soccer_italy_serie_a", "league": "Serie A", "sportGroup": "Soccer", "espnPath": "soccer/ita.1" },
+  { "sportKey": "soccer_germany_bundesliga1", "league": "Bundesliga", "sportGroup": "Soccer", "espnPath": "soccer/ger.1" },
+  { "sportKey": "soccer_france_ligue_one", "league": "Ligue 1", "sportGroup": "Soccer", "espnPath": "soccer/fra.1" },
+  { "sportKey": "soccer_uefa_champs_league", "league": "UEFA Champions League", "sportGroup": "Soccer", "espnPath": "soccer/uefa.champions" },
+  { "sportKey": "soccer_mexico_ligamx", "league": "Liga MX", "sportGroup": "Soccer", "espnPath": "soccer/mex.1" },
+  { "sportKey": "soccer_brazil_campeonato", "league": "Brasileirão", "sportGroup": "Soccer", "espnPath": "soccer/bra.1" },
   { "sportKey": "soccer_usa_mls", "league": "MLS", "sportGroup": "Soccer", "espnPath": "soccer/usa.1" },
-  { "sportKey": "baseball_wbc", "league": "World Baseball Classic", "sportGroup": "Baseball", "espnPath": "baseball/wbc" }
+  { "sportKey": "soccer_fifa_world_cup", "league": "FIFA World Cup", "sportGroup": "Soccer", "espnPath": "soccer/fifa.world" }
 ]
