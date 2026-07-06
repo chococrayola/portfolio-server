@@ -310,6 +310,7 @@ export const PLACES = [
     description: 'Cuevas costeras con petroglifos taínos y puentes naturales.',
     photoTips: 'Olas entrando a las cuevas; petroglifos con luz lateral.',
     access: 'Entrada con pago; terreno irregular.',
+    visited: true,
   },
   {
     id: 'observatorio-arecibo',
@@ -719,6 +720,7 @@ export const PLACES = [
     description: 'Jardín botánico de la UPR con senderos, orquídeas, palmas y bambúes.',
     photoTips: 'Macro de orquídeas y heliconias; lagartijos y libélulas junto al agua.',
     access: 'Entrada gratuita; senderos planos.',
+    visited: true,
   },
   {
     id: 'escambron',
