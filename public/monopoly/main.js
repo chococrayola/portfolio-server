@@ -59,13 +59,13 @@ function updatePanel() {
   box.innerHTML = state.players.map(p => {
     const props = Object.values(state.owned).filter(o => o.owner === p.id).length;
     return `<div class="player-card ${p.id === state.turn && !state.gameOver ? 'current' : ''} ${p.bankrupt ? 'dead' : ''}"
-      style="border-left:5px solid ${PLAYER_COLORS[p.id]}">
+      style="--pcolor:${PLAYER_COLORS[p.id]}">
       <div class="pc-row">
-        <span class="pc-token">${p.token}</span>
-        <span class="pc-name">${p.name}${p.isAI ? ' 🤖' : ''}</span>
+        <span class="pc-token" style="color:${PLAYER_COLORS[p.id]}">${p.token}</span>
+        <span class="pc-name">${p.name}${p.isAI ? ' <span class="bot-chip">BOT</span>' : ''}</span>
         <span class="pc-cash">$${p.cash}</span>
       </div>
-      <div class="pc-extra">${props} propiedades${p.jailCards.length ? ` · 🎟️×${p.jailCards.length}` : ''}${p.inJail ? ' · <span class="pc-jail">EN LA CÁRCEL 🚔</span>' : ''}</div>
+      <div class="pc-extra">${props} propiedades${p.jailCards.length ? ` · ${p.jailCards.length} tarjeta${p.jailCards.length > 1 ? 's' : ''}` : ''}${p.inJail ? ' · <span class="pc-jail">EN LA CÁRCEL</span>' : ''}</div>
     </div>`;
   }).join('');
 }
@@ -101,9 +101,9 @@ async function humanPreRoll(pid, payload) {
     updatePanel();
     const la = payload.actions ?? legalActions(state, pid);
     const pick2 = await actionBar([
-      { label: '🎲 Tirar los dados', cls: 'primary', value: 'roll' },
-      { label: '🏠 Propiedades', value: 'manage' },
-      { label: '🤝 Negociar', value: 'trade', disabled: !la.canTrade },
+      { label: 'Tirar los dados', cls: 'primary', value: 'roll' },
+      { label: 'Propiedades', value: 'manage' },
+      { label: 'Negociar', value: 'trade', disabled: !la.canTrade },
     ]);
     if (pick2 === 'roll') return { action: 'roll' };
     if (pick2 === 'manage') { manageOpen = true; continue; }
@@ -140,7 +140,13 @@ const io = {
         });
         return answer;
       }
-      case 'raiseCash': return humanRaiseCash(pid, payload);
+      case 'raiseCash': {
+        // Close after every choice: if the debt persists the engine re-asks and the
+        // panel reopens fresh; if it's settled, no stale modal is left blocking input.
+        const choice = await humanRaiseCash(pid, payload);
+        modals.closeModal();
+        return choice;
+      }
       case 'tradeRespond': return modals.tradeRespond(state, pid, payload.trade);
       default: return {};
     }
@@ -210,7 +216,7 @@ const io = {
         if (P.isAI || AUTOTEST) {
           const cardBox = document.getElementById('center-card');
           cardBox.hidden = false;
-          cardBox.innerHTML = `<div class="card-deck">${deckName === 'chance' ? '¿QUÉ PASÓ? ❓' : 'EL CORILLO 📦'}</div>${ev.card.text}`;
+          cardBox.innerHTML = `<div class="card-deck">${deckName === 'chance' ? '¿QUÉ PASÓ?' : 'EL CORILLO'}</div>${ev.card.text}`;
           log(`${P.token} ${P.name} sacó carta: ${ev.card.text}`, 'info');
           await delay(SPEED.card);
         } else {
@@ -236,13 +242,13 @@ const io = {
         break;
       case 'auctionStart':
         auctionView = { idx: ev.idx, highBid: 0, highBidder: null, out: new Set() };
-        log(`🔨 ¡SUBASTA! ${SPACES[ev.idx].name} al mejor postor.`, 'trade');
+        log(`¡SUBASTA! ${SPACES[ev.idx].name} al mejor postor.`, 'trade');
         if (!AUTOTEST && SPEED !== SPEEDS.instant) modals.renderAuction(state, auctionView, null);
         break;
       case 'auctionBid':
         auctionView.highBid = ev.bid;
         auctionView.highBidder = ev.pid;
-        log(`🔨 ${P.token} ${P.name} puja $${ev.bid} por ${SPACES[ev.idx].name}.`, 'trade');
+        log(`${P.name} puja $${ev.bid} por ${SPACES[ev.idx].name}.`, 'trade');
         quip(P, 'auction', { AMT: ev.bid }, 0.3);
         if (!AUTOTEST && SPEED !== SPEEDS.instant) { modals.renderAuction(state, auctionView, null); await delay(SPEED.bid); }
         break;
@@ -335,11 +341,17 @@ async function startGame(initialState) {
   boardEl = document.getElementById('board');
   logEl = document.getElementById('log');
   buildBoard(boardEl, (idx) => { if (!modals.modalOpen()) modals.showDeedPopup(state, idx); });
+  const vp = document.getElementById('board-viewport');
+  const vt = document.getElementById('view-toggle');
+  vt.onclick = () => {
+    vp.classList.toggle('tilt');
+    vt.textContent = vp.classList.contains('tilt') ? 'Vista 2D' : 'Vista 3D';
+  };
   bannerEl = document.getElementById('center-banner');
   renderBoard(boardEl, state);
   updatePanel();
   if (AUTOTEST) window.__mono = { state };
-  log('🎲 ¡Arrancó el Monopolio Boricua! Que gane el más buitre.', 'boom');
+  log('¡Arrancó el Monopolio Boricua! Que gane el más buitre.', 'boom');
 
   const turnCap = AUTOTEST ? 3000 : Infinity;
   let turns = 0;
@@ -354,7 +366,7 @@ async function startGame(initialState) {
   }
   clearSave();
   const winner = state.players[state.winner];
-  setBanner(`👑 ${winner.token} ${winner.name} ganó`);
+  setBanner(`${winner.name} GANÓ`);
   log(flavor('win', { P: winner.name }), 'boom');
   updatePanel();
   if (AUTOTEST) {

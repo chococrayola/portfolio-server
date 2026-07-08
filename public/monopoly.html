@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Monopolio Boricua 🇵🇷</title>
+  <title>Monopolio Boricua</title>
   <meta name="description" content="El Monopoly de Puerto Rico: compra Condado, hipoteca a Cayey, y reza que LUMA no te apague la partida." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐸</text></svg>" />
   <link rel="stylesheet" href="monopoly/style.css?v=1" />
@@ -12,7 +12,7 @@
   <!-- Setup -->
   <div id="setup">
     <div id="setup-card">
-      <h1>MONOPOLIO <span>BORICUA</span> 🇵🇷</h1>
+      <h1>MONOPOLIO <span>BORICUA</span></h1>
       <p class="tagline">El juego exacto. La isla exacta. El caos exacto.</p>
       <div id="resume-box" hidden>
         <p>Hay una partida guardá. ¿La seguimos o empezamos fresh?</p>
@@ -28,7 +28,7 @@
             <button data-speed="fast">Rápido</button>
           </div>
         </div>
-        <button id="btn-start" class="btn primary big">¡A jugar! 🎲</button>
+        <button id="btn-start" class="btn primary big">¡A jugar!</button>
         <p class="setup-hint">Regla oficial completa: subastas, hipotecas, trueques, quiebras. Sin llorar.</p>
       </div>
     </div>
@@ -37,11 +37,14 @@
   <!-- Game -->
   <div id="game" hidden>
     <div id="layout">
-      <div id="board"></div>
+      <div id="board-viewport" class="tilt">
+        <button id="view-toggle" class="btn small" title="Cambiar vista">Vista 2D</button>
+        <div id="board"></div>
+      </div>
       <aside id="panel">
         <div id="players-box"></div>
         <div id="action-bar"></div>
-        <div id="log-box"><h3>El Bochinche 📢</h3><div id="log"></div></div>
+        <div id="log-box"><h3>El Bochinche</h3><div id="log"></div></div>
       </aside>
     </div>
   </div>

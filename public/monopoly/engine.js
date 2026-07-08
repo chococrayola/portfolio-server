@@ -266,7 +266,7 @@ async function applyTrade(state, io, trade) {
   for (let n = 0; n < (give.jailCards ?? 0); n++) state.players[to].jailCards.push(state.players[from].jailCards.pop());
   for (let n = 0; n < (get.jailCards ?? 0); n++) state.players[from].jailCards.push(state.players[to].jailCards.pop());
   await io.emit({ type: 'trade', trade });
-  await io.emit({ type: 'log', kind: 'trade', text: `🤝 ${state.players[from].name} y ${state.players[to].name} hicieron negocio. Firmado en una servilleta.` });
+  await io.emit({ type: 'log', kind: 'trade', text: `${state.players[from].name} y ${state.players[to].name} hicieron negocio. Firmado en una servilleta.` });
 }
 
 // ---------- Debt / bankruptcy ----------

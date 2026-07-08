@@ -1,14 +1,29 @@
 // Monopolio Boricua — board DOM. Builds the 11×11 grid, moves tokens, deed cards.
 
 import { SPACES, GROUPS, RAIL_RENTS } from './data.js';
-import { unmortgageCost, countOwned, groupOwnedBy } from './engine.js';
+import { unmortgageCost, groupOwnedBy } from './engine.js';
 
-export const PLAYER_COLORS = ['#e63946', '#2b6cb0', '#2a9d8f', '#b5179e'];
+export const PLAYER_COLORS = ['#ff2d78', '#22e4f2', '#a3ff47', '#ffb52e'];
 
-const TYPE_ICONS = {
-  go: '🏁', jail: '🚔', parking: '🅿️', gotojail: '👮',
-  chance: '❓', chest: '📦', tax: '💸', rail: '🚈', util: '💡',
+// Minimal line-art icons (stroke = currentColor) — no emoji.
+const svg = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+const ICONS = {
+  go: svg('<path d="M4 12h12M11 6l6 6-6 6"/><path d="M20 5v14"/>'),
+  jail: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>'),
+  parking: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>'),
+  gotojail: svg('<rect x="9" y="4" width="11" height="16" rx="2"/><path d="M13.5 4v16M16.5 4v16M2 12h5M5 9l3 3-3 3"/>'),
+  chance: svg('<path d="M9 9a3 3 0 1 1 4.6 2.5c-1 .7-1.6 1.2-1.6 2.5"/><circle cx="12" cy="17.5" r=".8" fill="currentColor"/>'),
+  chest: svg('<rect x="4" y="8" width="16" height="11" rx="2"/><path d="M4 12h16M12 8v4M8 8V6a4 4 0 0 1 8 0v2"/>'),
+  tax: svg('<path d="M12 4v16M8 7.5c0-1.4 1.8-2.5 4-2.5s4 1.1 4 2.5-1.8 2.5-4 2.5-4 1.1-4 2.5 1.8 2.5 4 2.5 4-1.1 4-2.5"/>'),
+  rail: svg('<rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/><path d="M8 20l2-4M16 20l-2-4"/>'),
+  bolt: svg('<path d="M13 2 5 14h6l-1 8 8-12h-6l1-8z"/>'),
+  drop: svg('<path d="M12 3c4 5 6 8 6 11a6 6 0 1 1-12 0c0-3 2-6 6-11z"/>'),
 };
+
+function iconFor(s) {
+  if (s.type === 'util') return s.i === 12 ? ICONS.bolt : ICONS.drop;
+  return ICONS[s.type] ?? '';
+}
 
 export function spaceGridPos(i) {
   if (i <= 10) return { row: 11, col: 11 - i };        // bottom, right → left
@@ -34,10 +49,10 @@ export function buildBoard(container, onSpaceClick) {
     el.dataset.idx = s.i;
     el.style.gridRow = row;
     el.style.gridColumn = col;
-    const icon = s.type === 'util' && s.i === 28 ? '🚰' : (TYPE_ICONS[s.type] ?? '');
+    const icon = iconFor(s);
     el.innerHTML = `
       <div class="space-inner">
-        ${s.group ? `<div class="color-bar" style="background:${GROUPS[s.group].color}"></div>` : ''}
+        ${s.group ? `<div class="color-bar" style="--gc:${GROUPS[s.group].color}"></div>` : ''}
         <div class="space-body">
           ${icon ? `<div class="space-icon">${icon}</div>` : ''}
           <div class="space-name">${s.name}</div>
@@ -53,7 +68,7 @@ export function buildBoard(container, onSpaceClick) {
   const center = document.createElement('div');
   center.id = 'board-center';
   center.innerHTML = `
-    <div id="center-logo">MONOPOLIO<br><span>BORICUA</span> 🇵🇷</div>
+    <div id="center-logo"><span class="l1">MONOPOLIO</span><span class="l2">BORICUA</span></div>
     <div id="center-banner"></div>
     <div id="dice-area"><span class="die" id="die1"></span><span class="die" id="die2"></span></div>
     <div id="center-card" hidden></div>`;
@@ -70,9 +85,9 @@ export function renderBoard(container, state) {
     let html = '';
     if (o) {
       html += `<span class="owner-chip" style="background:${PLAYER_COLORS[o.owner]}"></span>`;
-      if (o.level === 5) html += `<span class="houses">🏨</span>`;
-      else if (o.level > 0) html += `<span class="houses">${'🏠'.repeat(o.level)}</span>`;
-      if (o.mortgaged) html += `<span class="mort-tag">HIPOTECADA</span>`;
+      if (o.level === 5) html += `<span class="pip hotel"></span>`;
+      else if (o.level > 0) html += `<span class="pips">${'<span class="pip"></span>'.repeat(o.level)}</span>`;
+      if (o.mortgaged) html += `<span class="mort-tag">HIP</span>`;
     }
     badges.innerHTML = html;
   }
@@ -119,7 +134,7 @@ export function deedHTML(state, idx) {
   const owner = o ? state.players[o.owner] : null;
   let rows = '';
   if (s.type === 'prop') {
-    const labels = ['Solar pelao', '1 casa', '2 casas', '3 casas', '4 casas', 'Hotel 🏨'];
+    const labels = ['Solar pelao', '1 casa', '2 casas', '3 casas', '4 casas', 'Hotel'];
     rows = s.rents.map((r, n) => {
       const now = o && (o.level === n || (n === 0 && o.level === 0));
       return `<tr class="${now ? 'now' : ''}"><td>${labels[n]}</td><td>$${n === 0 && o && groupOwnedBy(state, s.group, o.owner) && o.level === 0 ? r * 2 + ' <small>(set completo ×2)</small>' : r}</td></tr>`;
@@ -130,7 +145,7 @@ export function deedHTML(state, idx) {
   } else if (s.type === 'util') {
     rows = `<tr><td>Con 1 utility</td><td>4 × dados</td></tr><tr><td>Con las 2</td><td>10 × dados</td></tr>`;
   }
-  const bar = s.group ? `style="background:${GROUPS[s.group].color}"` : 'style="background:#345"';
+  const bar = s.group ? `style="--gc:${GROUPS[s.group].color}"` : '';
   return `
     <div class="deed">
       <div class="deed-head" ${bar}>${s.name}</div>

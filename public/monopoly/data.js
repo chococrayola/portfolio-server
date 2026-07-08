@@ -2,14 +2,14 @@
 // Official Monopoly prices/rents/mechanics, Puerto Rico names + Spanglish flavor.
 
 export const GROUPS = {
-  brown:  { label: 'La Montaña',   color: '#8b4513', members: [1, 3] },
-  lblue:  { label: 'Playita',      color: '#9fd8e8', members: [6, 8, 9] },
-  pink:   { label: 'Chinchorreo',  color: '#d84a8c', members: [11, 13, 14] },
-  orange: { label: 'Costa Oeste',  color: '#e8862a', members: [16, 18, 19] },
-  red:    { label: 'Área Metro',   color: '#d33a2f', members: [21, 23, 24] },
-  yellow: { label: 'Los Chavos',   color: '#f2c231', members: [26, 27, 29] },
-  green:  { label: 'Fancy',        color: '#1f9e4f', members: [31, 32, 34] },
-  dblue:  { label: 'Turisteo',     color: '#2456c4', members: [37, 39] },
+  brown:  { label: 'La Montaña',   color: '#c47a45', members: [1, 3] },
+  lblue:  { label: 'Playita',      color: '#4fd8f0', members: [6, 8, 9] },
+  pink:   { label: 'Chinchorreo',  color: '#ff4fa3', members: [11, 13, 14] },
+  orange: { label: 'Costa Oeste',  color: '#ff8e2b', members: [16, 18, 19] },
+  red:    { label: 'Área Metro',   color: '#ff4444', members: [21, 23, 24] },
+  yellow: { label: 'Los Chavos',   color: '#ffd400', members: [26, 27, 29] },
+  green:  { label: 'Fancy',        color: '#2eff9e', members: [31, 32, 34] },
+  dblue:  { label: 'Turisteo',     color: '#5c86ff', members: [37, 39] },
 };
 
 // rents: [base, 1 casa, 2 casas, 3 casas, 4 casas, hotel]
@@ -111,10 +111,12 @@ export const CHEST = [
   { id: 'cc16', text: 'Segundo lugar en el concurso de la mejor alcapurria. Perdiste contra Doña Carmen, obvio. Cobra $10.', effect: { type: 'money', amount: 10 } },
 ];
 
-export const TOKENS = ['🐸', '🍧', '🐓', '🩴', '🥥', '🍹', '🚙', '🌺'];
+// Geometric tokens (rendered in the player's neon color, not emoji).
+export const TOKENS = ['▲', '●', '■', '◆', '⬢', '✦', '✚', '◗'];
 export const TOKEN_NAMES = {
-  '🐸': 'El Coquí', '🍧': 'La Piragua', '🐓': 'El Gallo', '🩴': 'La Chancleta',
-  '🥥': 'El Coco', '🍹': 'La Piña Colada', '🚙': 'La Guagua', '🌺': 'La Flor de Maga',
+  '▲': 'El Yunque', '●': 'La Ficha de Dominó', '■': 'El Bloque de Hielo (pa’l apagón)',
+  '◆': 'El Diamante del Caribe', '⬢': 'El Panal', '✦': 'La Estrella Solitaria',
+  '✚': 'La Cruz del Morro', '◗': 'La Medialuna de Pan Sobao',
 };
 
 // AI personalities. Tuning: aggro = auction/buy boldness, buildLove = building appetite,
@@ -183,11 +185,11 @@ export const FLAVOR = {
   auction_won: ['%P% ganó la subasta de %S% por $%AMT%. Remate del bueno.'],
   auction_nobody: ['Nadie quiso %S%. Ni regalao. El banco se queda con eso.'],
   tax: ['%P% pagó $%AMT% de impuestos. Hacienda dice "gracias" (mentira, no dice nada).'],
-  bankrupt: ['💀 %P% QUEBRÓ. Se va del juego como se fue la luz: sin avisar.', '💀 %P% está en la quiebra. Capítulo 7, verso boricua.'],
+  bankrupt: ['%P% QUEBRÓ. Se va del juego como se fue la luz: sin avisar.', '%P% está en la quiebra. Capítulo 7, verso boricua.'],
   built: ['%P% construyó en %S%. Sin permisos, obviamente.', '%P% levantó construcción en %S%. El vecino ya llamó a la policía.'],
   hotel: ['%P% montó un HOTEL en %S%. Airbnb tiembla.'],
   mortgage: ['%P% hipotecó %S%. "Es un préstamo puente", dice.'],
-  win: ['🏆 %P% ES DUEÑO DE LA ISLA ENTERA. Ni los fondos buitre lograron tanto.'],
+  win: ['%P% ES DUEÑO DE LA ISLA ENTERA. Ni los fondos buitre lograron tanto.'],
 };
 
 export function pick(rng, arr) {
