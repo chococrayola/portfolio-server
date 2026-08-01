@@ -29,24 +29,42 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // --- "Visited" state -------------------------------------------------------
 // Which places you've already been to. Stored on your device (localStorage)
-// so it survives reloads. Seeded once from any place with `visited: true` in
-// places.js, then fully controlled by the "Marcar como visitado" button.
+// so it survives reloads. Places flagged `visited: true` in places.js are
+// applied as one-time "seeds": each seed id is added the first time this
+// device sees it (so newly flagged places show up even on devices that
+// already loaded the map), then the set is fully controlled by the
+// "Marcar como visitado" button — un-marking a seeded place sticks.
 
 const STORE_KEY = 'mapa-visitados';
-const INIT_KEY = 'mapa-visitados-init';
+const SEEDED_KEY = 'mapa-visitados-seeded'; // seed ids already applied here
+const LEGACY_INIT_KEY = 'mapa-visitados-init';
 
 function loadVisited() {
+  const seedIds = PLACES.filter((p) => p.visited).map((p) => p.id);
   try {
-    if (localStorage.getItem(INIT_KEY) !== '1') {
-      const seed = PLACES.filter((p) => p.visited).map((p) => p.id);
-      localStorage.setItem(STORE_KEY, JSON.stringify(seed));
-      localStorage.setItem(INIT_KEY, '1');
-      return new Set(seed);
+    const set = new Set(JSON.parse(localStorage.getItem(STORE_KEY) || '[]'));
+    let applied = new Set(JSON.parse(localStorage.getItem(SEEDED_KEY) || '[]'));
+    // Migrate from the old boolean init flag. The legacy scheme only ever
+    // shipped with these two seeds, so exactly those count as applied —
+    // any seed added later must still go through the loop below.
+    if (localStorage.getItem(LEGACY_INIT_KEY) === '1') {
+      applied = new Set([...applied, 'cueva-indio', 'jardin-botanico-sj']);
+      localStorage.removeItem(LEGACY_INIT_KEY);
     }
-    return new Set(JSON.parse(localStorage.getItem(STORE_KEY) || '[]'));
+    let changed = false;
+    for (const id of seedIds) {
+      if (!applied.has(id)) {
+        set.add(id);
+        applied.add(id);
+        changed = true;
+      }
+    }
+    localStorage.setItem(SEEDED_KEY, JSON.stringify([...applied]));
+    if (changed) localStorage.setItem(STORE_KEY, JSON.stringify([...set]));
+    return set;
   } catch (e) {
     // localStorage blocked (e.g. private mode) — fall back to the data flags.
-    return new Set(PLACES.filter((p) => p.visited).map((p) => p.id));
+    return new Set(seedIds);
   }
 }
 
@@ -174,12 +192,15 @@ for (const place of PLACES) {
 
 // --- Visited toggle wiring -------------------------------------------------
 
-// When a popup opens, wire its "Marcar como visitado" button. The popup DOM
-// is rebuilt on each open, so attaching here (and letting it die with the
-// popup on close) avoids leaks.
+// When a popup opens, wire its "Marcar como visitado" button. Leaflet
+// creates each popup's DOM container once and REUSES it on every reopen
+// (DivOverlay.onAdd: `this._container || this._initLayout()`), so guard
+// with a dataset flag — otherwise each reopen stacks another listener and
+// one tap would toggle multiple times.
 map.on('popupopen', (e) => {
   const root = e.popup.getElement();
-  if (!root) return;
+  if (!root || root.dataset.visitedWired) return;
+  root.dataset.visitedWired = '1';
   root.addEventListener('click', (ev) => {
     const btn = ev.target.closest('.btn-visited');
     if (!btn) return;
