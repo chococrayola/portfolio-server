@@ -121,6 +121,10 @@ main { max-width: 1040px; margin: 0 auto; padding: 18px 16px 0; }
 }
 .link-btn:hover { color: var(--cream); }
 
+/* Armed state of a two-tap destructive button ("Tap again to …") */
+.btn.armed { background: rgba(255, 107, 107, 0.16); border-color: var(--danger); color: #ffb9b9; }
+.link-btn.armed { color: var(--danger); font-weight: 700; }
+
 /* ---- Combined result ---- */
 .combo { margin-bottom: 18px; }
 .combo-result {

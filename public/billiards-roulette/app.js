@@ -80,6 +80,29 @@ function cleanName(v, max = NAME_MAX) {
 function activeEntries(wheel) {
   return wheel.entries.filter((e) => e.enabled);
 }
+
+/* Two-tap confirmation for destructive buttons: the first tap arms the
+ * button for a few seconds and relabels it, the second tap runs the action.
+ * Unlike a confirm() dialog, this works on phones and inside embedded frames. */
+function armConfirm(btn, action, armedText) {
+  if (btn.dataset.armed === '1') {
+    disarm(btn);
+    action();
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.dataset.label = btn.textContent;
+  btn.textContent = armedText;
+  btn.classList.add('armed');
+  btn._disarmTimer = setTimeout(() => disarm(btn), 4000);
+}
+function disarm(btn) {
+  clearTimeout(btn._disarmTimer);
+  if (btn.dataset.armed !== '1') return;
+  btn.dataset.armed = '0';
+  btn.textContent = btn.dataset.label;
+  btn.classList.remove('armed');
+}
 function defaultsFor(wheelId) {
   return DEFAULT_WHEELS.find((w) => w.id === wheelId);
 }
@@ -292,13 +315,16 @@ function buildView(wheel) {
   });
   els.bulkApply.addEventListener('click', () => {
     const parsed = parseBulk(els.bulkText.value, wheel);
-    if (!parsed.length && !confirm('This empties the wheel. Continue?')) return;
-    wheel.entries = parsed;
-    wheel.drawn = [];
-    persist();
-    renderEntries(view);
-    syncWheel(view);
-    els.bulk.open = false;
+    const apply = () => {
+      wheel.entries = parsed;
+      wheel.drawn = [];
+      persist();
+      renderEntries(view);
+      syncWheel(view);
+      els.bulk.open = false;
+    };
+    if (parsed.length) apply();
+    else armConfirm(els.bulkApply, apply, 'Tap again to empty the wheel');
   });
 
   els.noRepeat.addEventListener('change', () => {
@@ -309,15 +335,20 @@ function buildView(wheel) {
   });
 
   els.resetBtn.addEventListener('click', () => {
-    if (!confirm(`Reset the "${wheel.title}" wheel to its default list?`)) return;
-    const def = defaultsFor(wheel.id);
-    wheel.title = def.title;
-    wheel.entries = structuredClone(def.entries);
-    wheel.drawn = [];
-    els.title.value = wheel.title;
-    persist();
-    renderEntries(view);
-    syncWheel(view);
+    armConfirm(
+      els.resetBtn,
+      () => {
+        const def = defaultsFor(wheel.id);
+        wheel.title = def.title;
+        wheel.entries = structuredClone(def.entries);
+        wheel.drawn = [];
+        els.title.value = wheel.title;
+        persist();
+        renderEntries(view);
+        syncWheel(view);
+      },
+      'Tap again to reset this wheel'
+    );
   });
 
   wheelsEl.appendChild(frag);
@@ -653,10 +684,16 @@ function renderSoundBtn() {
 // ---- Wire up ----
 spinAllBtn.addEventListener('click', spinAll);
 $('clearHistory').addEventListener('click', () => {
-  if (!spinLog.length || !confirm('Clear the spin history?')) return;
-  spinLog = [];
-  persist();
-  renderHistory();
+  if (!spinLog.length) return;
+  armConfirm(
+    $('clearHistory'),
+    () => {
+      spinLog = [];
+      persist();
+      renderHistory();
+    },
+    'Tap again to clear'
+  );
 });
 soundBtn.addEventListener('click', () => {
   Sound.enabled = !Sound.enabled;
