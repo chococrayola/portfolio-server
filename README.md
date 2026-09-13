@@ -49,3 +49,26 @@ Blueprint is included for a one-click deploy on [Render](https://render.com)
 4. Deploy. You'll get a URL like `https://portfolio-server-xxxx.onrender.com`.
    The free tier spins down after ~15 min idle, so the first request after
    a period of inactivity takes 30-60s to wake up.
+
+## Billiards Roulette
+
+`public/billiards-roulette.html` is a pair of spinning wheels for pool night:
+the **Game** wheel picks what you play (8-ball, 9-ball, one-pocket, …) and the
+**Play Style** wheel picks the twist you play it with (opposite hand, banks
+only, shot clock, …). Spin either wheel on its own, or hit **Spin both wheels**
+for a combined pick. Every spin is logged in the history list.
+
+Every wheel is fully editable from its **Edit options** panel: rename the
+wheel, add / rename / delete options, switch options in or out of play
+without deleting them, give an option a bigger slice (× odds, 1–10), or paste a
+whole list into the bulk editor (one option per line; `Name | 3` sets odds,
+`Name | off` keeps it in the list but out of spins). The "No repeats" toggle
+makes every option come up once before any of them can repeat. Lists,
+settings and history live in the browser's localStorage — nothing touches the
+server, so the page works on GitHub Pages too.
+
+Picks come from `crypto.getRandomValues` with rejection sampling (no modulo
+bias) and are decided before the wheel starts turning; the number of turns
+and where inside the winning slice the pointer stops are randomized on top of
+that, so the animation only shows the result. To add a third wheel, append an
+entry to `DEFAULT_WHEELS` in `public/billiards-roulette/app.js`.
