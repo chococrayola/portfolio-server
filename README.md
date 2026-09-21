@@ -52,11 +52,18 @@ Blueprint is included for a one-click deploy on [Render](https://render.com)
 
 ## Billiards Roulette
 
-`public/billiards-roulette.html` is a pair of spinning wheels for pool night:
-the **Game** wheel picks what you play (8-ball, 9-ball, one-pocket, …) and the
+`public/billiards-roulette.html` is a set of spinning wheels for pool night:
+the **Game** wheel picks what you play (8-ball, 9-ball, one-pocket, …), the
 **Play Style** wheel picks the twist you play it with (opposite hand, banks
-only, shot clock, …). Spin either wheel on its own, or hit **Spin both wheels**
-for a combined pick. Every spin is logged in the history list.
+only, no chalk, …), and the **Pocket** wheel picks which pocket the ball has
+to go in. Spin any wheel on its own, or hit the big button for a combined
+pick. Every spin is logged in the history list.
+
+Each wheel has an **In the big spin** switch deciding whether the big button
+includes it, and the big button names what it will spin ("Spin both wheels",
+"Spin all 3 wheels"). The Pocket wheel ships with that switch off, since only
+some games call for a pocket draw — flip it on for those games, or leave it
+off and tap the Pocket wheel's own Spin button whenever a shot needs one.
 
 Every wheel is fully editable from its **Edit options** panel: rename the
 wheel, add / rename / delete options, switch options in or out of play
@@ -71,4 +78,5 @@ Picks come from `crypto.getRandomValues` with rejection sampling (no modulo
 bias) and are decided before the wheel starts turning; the number of turns
 and where inside the winning slice the pointer stops are randomized on top of
 that, so the animation only shows the result. To add a third wheel, append an
-entry to `DEFAULT_WHEELS` in `public/billiards-roulette/app.js`.
+entry to `DEFAULT_WHEELS` in `public/billiards-roulette/app.js`; set
+`inCombo: false` on it to keep it out of the big spin by default.

@@ -1,5 +1,6 @@
-/* Billiards Roulette — two customizable spinning wheels: one picks the
- * game (8-ball, 9-ball, …), the other picks the style we play it with.
+/* Billiards Roulette — customizable spinning wheels for pool night: one
+ * picks the game, one picks the style we play it with, and one picks which
+ * pocket the ball has to go in for the games that call for it.
  * All state lives in localStorage; no backend involved.
  * Depends on wheel.js (RouletteWheel + Rand) being loaded first. */
 'use strict';
@@ -15,10 +16,13 @@ const TITLE_MAX = 30;
 const WEIGHT_MIN = 1;
 const WEIGHT_MAX = 10;
 
-/* Every wheel: { id, title, hint, noRepeat, drawn, entries }.
+/* Every wheel: { id, title, hint, optional, inCombo, noRepeat, drawn, entries }.
  * Every entry: { id, name, weight (1–10 = slice size / odds), enabled }.
- * Adding another wheel to this list is all it takes to get a third one
- * rendered, edited and spun alongside the other two. */
+ * `inCombo` says whether the wheel joins the big "spin them together"
+ * button — a wheel that only matters in some games (the pocket wheel) ships
+ * with it off and is spun on its own when the situation comes up.
+ * Adding another wheel to this list is all it takes to get a fourth one
+ * rendered, edited and spun alongside the others. */
 const DEFAULT_WHEELS = [
   {
     id: 'game',
@@ -28,13 +32,9 @@ const DEFAULT_WHEELS = [
       '8-Ball',
       '9-Ball',
       '10-Ball',
-      'Straight Pool (14.1)',
+      'Enchulao',
       'One-Pocket',
       'Bank Pool',
-      'Rotation (61)',
-      'Cutthroat',
-      '3-Ball',
-      '7-Ball',
     ]),
   },
   {
@@ -44,14 +44,35 @@ const DEFAULT_WHEELS = [
     entries: seed('style', [
       'Standard rules',
       'Opposite hand',
-      'One-handed',
-      'Call every shot',
-      'Bridge on every shot',
       'Banks only',
-      '15-second shot clock',
-      'Scotch doubles (alternate shots)',
-      'Ball in hand anywhere',
-      'No talking',
+      'Last Ball Jump Shot',
+      'Only Combination Shots',
+      'Scratch and Done',
+      'Soft Brack Standard',
+      'Opponent Chooses Pocket every shot',
+      'Color Code',
+      'Clockwise Pocketing',
+      'Only Middle Pocket',
+      'No Defense',
+      'Crazy Rack',
+      'No chalk',
+    ]),
+  },
+  {
+    id: 'pocket',
+    title: 'Pocket',
+    hint: 'Which pocket the ball has to go in. Head is the end you break from, foot is the end the rack sits on.',
+    // Only some games and situations call for a pocket draw, so this wheel
+    // sits out of the big spin until you switch it in.
+    optional: true,
+    inCombo: false,
+    entries: seed('pocket', [
+      'Left head corner',
+      'Right head corner',
+      'Left side',
+      'Right side',
+      'Left foot corner',
+      'Right foot corner',
     ]),
   },
 ];
@@ -133,6 +154,8 @@ function loadWheels() {
       id: def.id,
       title: def.title,
       hint: def.hint,
+      optional: Boolean(def.optional),
+      inCombo: def.inCombo !== false,
       noRepeat: false,
       drawn: [],
       entries: structuredClone(def.entries),
@@ -144,6 +167,7 @@ function loadWheels() {
     return {
       ...base,
       title: cleanName(s.title, TITLE_MAX) || def.title,
+      inCombo: typeof s.inCombo === 'boolean' ? s.inCombo : base.inCombo,
       noRepeat: Boolean(s.noRepeat),
       drawn: Array.isArray(s.drawn) ? s.drawn.filter((id) => ids.has(id)) : [],
       entries,
@@ -250,6 +274,8 @@ function buildView(wheel) {
     result: q(root, '.wheel-result'),
     spinBtn: q(root, '.spin-btn'),
     editToggle: q(root, '.edit-toggle'),
+    inCombo: q(root, '.in-combo'),
+    optionalBadge: q(root, '.optional-badge'),
     editor: q(root, '.editor'),
     list: q(root, '.entry-list'),
     newName: q(root, '.new-name'),
@@ -274,12 +300,21 @@ function buildView(wheel) {
   els.hint.textContent = wheel.hint;
   els.canvas.setAttribute('aria-label', `Spin the ${wheel.title} wheel`);
   els.noRepeat.checked = wheel.noRepeat;
+  els.inCombo.checked = wheel.inCombo;
+  els.optionalBadge.hidden = !wheel.optional;
+
+  els.inCombo.addEventListener('change', () => {
+    wheel.inCombo = els.inCombo.checked;
+    persist();
+    updateSpinAll();
+  });
 
   els.title.addEventListener('change', () => {
     wheel.title = cleanName(els.title.value, TITLE_MAX) || defaultsFor(wheel.id).title;
     els.title.value = wheel.title;
     els.canvas.setAttribute('aria-label', `Spin the ${wheel.title} wheel`);
     persist();
+    updateSpinAll();
   });
   els.title.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') els.title.blur();
@@ -390,6 +425,7 @@ function updateStatus(view) {
   els.empty.hidden = active.length > 0;
   els.spinBtn.disabled = spinsInFlight > 0 || !active.length;
   els.root.classList.toggle('is-empty', !active.length);
+  updateSpinAll();
 }
 
 // ---- Option editor ----
@@ -530,12 +566,32 @@ function setBusy(delta) {
   spinsInFlight = Math.max(0, spinsInFlight + delta);
   const busy = spinsInFlight > 0;
   document.body.classList.toggle('busy', busy);
-  spinAllBtn.disabled = busy || !views.some((v) => activeEntries(v.wheel).length);
   for (const v of views) {
     v.els.spinBtn.disabled = busy || !activeEntries(v.wheel).length;
     v.els.editor.disabled = busy;
     v.els.title.disabled = busy;
+    v.els.inCombo.disabled = busy;
   }
+  updateSpinAll();
+}
+
+/* The wheels currently switched into the big spin. */
+function comboViews() {
+  return views.filter((v) => v.wheel.inCombo);
+}
+
+/* The big button names exactly what it will spin, so nobody has to guess
+ * whether the pocket wheel is in play this game. */
+function updateSpinAll() {
+  const included = comboViews();
+  const ready = included.filter((v) => activeEntries(v.wheel).length);
+  let label;
+  if (!included.length) label = 'Switch a wheel into the big spin';
+  else if (included.length === 1) label = `🎲 Spin the ${included[0].wheel.title} wheel`;
+  else if (included.length === 2) label = '🎲 Spin both wheels';
+  else label = `🎲 Spin all ${included.length} wheels`;
+  spinAllBtn.textContent = label;
+  spinAllBtn.disabled = spinsInFlight > 0 || !ready.length;
 }
 
 /* Choose the winner (index within `active`). Pure crypto randomness by
@@ -586,7 +642,7 @@ async function spinWheel(view, { record = true, jingle = true } = {}) {
 
 async function spinAll() {
   if (spinsInFlight > 0) return;
-  const ready = views.filter((v) => activeEntries(v.wheel).length && !v.rw.spinning);
+  const ready = comboViews().filter((v) => activeEntries(v.wheel).length && !v.rw.spinning);
   if (!ready.length) return;
   hideCombo();
   const results = await Promise.all(ready.map((v) => spinWheel(v, { record: false, jingle: false })));

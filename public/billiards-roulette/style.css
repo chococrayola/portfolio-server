@@ -15,6 +15,7 @@
   --line: rgba(247, 239, 221, 0.16);
   --danger: #ff6b6b;
   --radius: 18px;
+  --maxw: 1240px;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -51,7 +52,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  max-width: 1040px;
+  max-width: var(--maxw);
   margin: 0 auto;
 }
 .brand {
@@ -61,7 +62,7 @@ body {
   color: #fff7e3;
 }
 .subtitle {
-  max-width: 1040px;
+  max-width: var(--maxw);
   margin: 4px auto 0;
   color: #e8d7bd;
   font-size: 0.9rem;
@@ -79,7 +80,7 @@ body {
 }
 .icon-btn[aria-pressed="false"] { opacity: 0.6; }
 
-main { max-width: 1040px; margin: 0 auto; padding: 18px 16px 0; }
+main { max-width: var(--maxw); margin: 0 auto; padding: 18px 16px 0; }
 
 /* ---- Buttons ---- */
 .btn {
@@ -187,7 +188,22 @@ main { max-width: 1040px; margin: 0 auto; padding: 18px 16px 0; }
   gap: 12px;
   min-width: 0;
 }
-.wheel-head { display: flex; flex-direction: column; gap: 2px; }
+.wheel-head { display: flex; flex-direction: column; gap: 3px; }
+.wheel-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wheel-title-row .wheel-title { flex: 1 1 auto; }
+/* Marks a wheel that sits out of the big spin until a game calls for it. */
+.optional-badge {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--chalk);
+  border: 1px solid rgba(98, 177, 236, 0.45);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
 /* The title is an <input> styled as a heading — a dashed underline hints
  * that it can be renamed. (Specificity beats the generic text-input rule.) */
 .wheel-head .wheel-title {
@@ -208,6 +224,24 @@ main { max-width: 1040px; margin: 0 auto; padding: 18px 16px 0; }
 .wheel-head .wheel-title:disabled { opacity: 1; color: var(--gold); }
 .wheel-hint { color: var(--muted); font-size: 0.85rem; }
 .wheel-count { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* Switches this wheel in and out of the big "spin them together" button. */
+.combo-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.combo-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.combo-toggle .switch { width: 34px; height: 20px; flex: 0 0 auto; }
+.combo-toggle .switch::after { width: 14px; height: 14px; }
+.in-combo:checked + .switch::after { transform: translateX(14px); }
+.in-combo:checked ~ .combo-toggle-text { color: var(--cream); }
 
 .wheel-stage {
   position: relative;
@@ -287,8 +321,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 18px 16px 0; }
   100% { transform: scale(1); opacity: 1; }
 }
 
-.wheel-actions { display: flex; gap: 10px; }
-.wheel-actions .spin-btn { flex: 1.4; }
+/* margin-top:auto pins the buttons to the bottom of the card, so the action
+ * rows line up across wheels whose hint text runs to different lengths. It
+ * collapses to zero once the editor opens and the free space is gone. */
+.wheel-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 4px; }
+.wheel-actions .btn { white-space: nowrap; padding-inline: 14px; }
+.wheel-actions .spin-btn { flex: 1.15; }
 .wheel-actions .edit-toggle { flex: 1; }
 
 /* ---- Option editor ---- */
@@ -365,9 +403,11 @@ textarea { width: 100%; resize: vertical; font-family: ui-monospace, "SF Mono", 
   background: #fff;
   transition: transform 0.15s ease;
 }
-.e-on:checked + .switch { background: #2fbf71; }
+.e-on:checked + .switch,
+.in-combo:checked + .switch { background: #2fbf71; }
 .e-on:checked + .switch::after { transform: translateX(16px); }
-.e-on:focus-visible + .switch { outline: 2px solid var(--chalk); outline-offset: 2px; }
+.e-on:focus-visible + .switch,
+.in-combo:focus-visible + .switch { outline: 2px solid var(--chalk); outline-offset: 2px; }
 .del {
   flex: 0 0 38px;
   width: 38px;
@@ -418,7 +458,7 @@ textarea { width: 100%; resize: vertical; font-family: ui-monospace, "SF Mono", 
 .empty { color: var(--muted); text-align: center; padding: 14px; font-size: 0.92rem; }
 
 .foot {
-  max-width: 1040px;
+  max-width: var(--maxw);
   margin: 26px auto 0;
   padding: 0 16px;
   color: var(--muted);
