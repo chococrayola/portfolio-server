@@ -80,3 +80,12 @@ and where inside the winning slice the pointer stops are randomized on top of
 that, so the animation only shows the result. To add a third wheel, append an
 entry to `DEFAULT_WHEELS` in `public/billiards-roulette/app.js`; set
 `inCombo: false` on it to keep it out of the big spin by default.
+
+Saved lists always win over the defaults, so a device that has been used
+before never loses its own edits when the code changes. To push a *new*
+option out to devices that already have saved lists, add it to
+`DEFAULT_WHEELS` tagged `{ name: '...', since: N }` and bump
+`DEFAULTS_VERSION` to the same `N`. Each device appends the newly tagged
+options once and nothing else: options it deleted stay deleted, and renamed
+or reordered lists are untouched. Renaming an existing default only reaches
+a device through that wheel's "Reset this wheel to defaults" button.

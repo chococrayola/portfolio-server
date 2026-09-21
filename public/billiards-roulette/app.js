@@ -9,7 +9,14 @@ const STORAGE = {
   wheels: 'br.wheels',
   history: 'br.history',
   sound: 'br.sound',
+  defaultsVersion: 'br.defaultsVersion',
 };
+
+/* Bump this when new options are added to DEFAULT_WHEELS, and tag those
+ * entries with `since: <the new number>`. A device that already has its own
+ * saved lists then picks up just the newly tagged options on next load —
+ * options it deleted stay deleted, and its renames are left alone. */
+const DEFAULTS_VERSION = 2;
 const HISTORY_LIMIT = 30;
 const NAME_MAX = 40;
 const TITLE_MAX = 30;
@@ -56,29 +63,41 @@ const DEFAULT_WHEELS = [
       'No Defense',
       'Crazy Rack',
       'No chalk',
+      { name: 'Roulette Pocket Picker', since: 2 },
     ]),
   },
   {
     id: 'pocket',
     title: 'Pocket',
-    hint: 'Which pocket the ball has to go in. Head is the end you break from, foot is the end the rack sits on.',
+    hint: 'Which pocket the ball has to go in',
     // Only some games and situations call for a pocket draw, so this wheel
     // sits out of the big spin until you switch it in.
     optional: true,
     inCombo: false,
     entries: seed('pocket', [
-      'Left head corner',
-      'Right head corner',
-      'Left side',
-      'Right side',
-      'Left foot corner',
-      'Right foot corner',
+      'Izquierda Arriba',
+      'Izquierda Medio',
+      'Izquierda Abajo',
+      'Derecha Arriba',
+      'Derecha Medio',
+      'Derecha Abajo',
     ]),
   },
 ];
 
 function seed(prefix, names) {
-  return names.map((name, i) => ({ id: `${prefix}-d${i}`, name, weight: 1, enabled: true }));
+  return names.map((n, i) => {
+    const spec = typeof n === 'string' ? { name: n } : n;
+    const entry = { id: `${prefix}-d${i}`, name: spec.name, weight: 1, enabled: true };
+    if (spec.since) entry.since = spec.since;
+    return entry;
+  });
+}
+
+/* A default entry as it lives in a wheel — `since` is release bookkeeping
+ * and never gets stored alongside the user's own lists. */
+function plainEntry(d) {
+  return { id: d.id, name: d.name, weight: d.weight, enabled: d.enabled };
 }
 
 // ---- Helpers ----
@@ -149,6 +168,11 @@ function loadWheels() {
   if (Array.isArray(saved)) {
     for (const w of saved) if (w && typeof w.id === 'string') byId.set(w.id, w);
   }
+  // A device with no stored version but saved lists predates versioning, so
+  // it has seen version 1; a device with nothing saved starts current.
+  const stored = parseInt(localStorage.getItem(STORAGE.defaultsVersion), 10);
+  const seenVersion = Number.isFinite(stored) ? stored : byId.size ? 1 : DEFAULTS_VERSION;
+
   return DEFAULT_WHEELS.map((def) => {
     const base = {
       id: def.id,
@@ -158,11 +182,16 @@ function loadWheels() {
       inCombo: def.inCombo !== false,
       noRepeat: false,
       drawn: [],
-      entries: structuredClone(def.entries),
+      entries: def.entries.map(plainEntry),
     };
     const s = byId.get(def.id);
     if (!s) return base;
     const entries = Array.isArray(s.entries) ? s.entries.map(normalizeEntry).filter(Boolean) : base.entries;
+    for (const d of def.entries) {
+      if ((d.since || 1) <= seenVersion) continue;
+      const already = entries.some((e) => e.id === d.id || e.name.toLowerCase() === d.name.toLowerCase());
+      if (!already) entries.push(plainEntry(d));
+    }
     const ids = new Set(entries.map((e) => e.id));
     return {
       ...base,
@@ -190,6 +219,7 @@ function persist() {
     localStorage.setItem(STORAGE.wheels, JSON.stringify(wheels));
     localStorage.setItem(STORAGE.history, JSON.stringify(spinLog));
     localStorage.setItem(STORAGE.sound, Sound.enabled ? 'on' : 'off');
+    localStorage.setItem(STORAGE.defaultsVersion, String(DEFAULTS_VERSION));
   } catch (_) {
     /* private mode / quota — the session still works, it just isn't remembered */
   }
@@ -375,7 +405,7 @@ function buildView(wheel) {
       () => {
         const def = defaultsFor(wheel.id);
         wheel.title = def.title;
-        wheel.entries = structuredClone(def.entries);
+        wheel.entries = def.entries.map(plainEntry);
         wheel.drawn = [];
         els.title.value = wheel.title;
         persist();
@@ -761,6 +791,7 @@ soundBtn.addEventListener('click', () => {
 // ---- Init ----
 for (const wheel of wheels) views.push(buildView(wheel));
 setBusy(0);
+persist();
 renderHistory();
 renderSoundBtn();
 if (!Rand.secure) $('randNote').textContent = 'This browser has no crypto random source; falling back to Math.random().';
