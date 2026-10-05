@@ -49,3 +49,19 @@ Blueprint is included for a one-click deploy on [Render](https://render.com)
 4. Deploy. You'll get a URL like `https://portfolio-server-xxxx.onrender.com`.
    The free tier spins down after ~15 min idle, so the first request after
    a period of inactivity takes 30-60s to wake up.
+
+## Parallel Live Simulator
+
+`public/parallel-live.html` is a phone-first "go live" simulator: your camera
+with a simulated audience (viewers, comments, questions, hearts). It runs
+entirely in the browser; nothing is sent anywhere.
+
+It installs as a phone app from its page: on Android, Chrome's menu → **Install
+app**; on iPhone, Safari's Share button → **Add to Home Screen**. The name,
+icons and full-screen launch come from `public/parallel-live/manifest.webmanifest`
+and the icons beside it. `public/parallel-live-sw.js` keeps the page, its icons
+and the Tailwind script available offline. It is registered with scope
+`parallel-live`, so it never handles the site's other pages. The page is always
+fetched fresh when online, but the icons and manifest are served from the
+cache: when you change them (or add files to the worker's `FILES` list), bump
+`CACHE` in the worker so phones pick up the new versions.

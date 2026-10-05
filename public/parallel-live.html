@@ -4,7 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Parallel Live Simulator</title>
+    <!-- Installable app: name, icon and full-screen launch from the home screen -->
+    <link rel="manifest" href="parallel-live/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Parallel Live">
+    <link rel="apple-touch-icon" href="parallel-live/apple-touch-icon.png">
+    <style>
+        /* Black from the very first frame, even while the Tailwind script below downloads,
+           and hidden until Tailwind has styled the page. */
+        html, body { background: #000; }
+        html:not(.styled) body { visibility: hidden; }
+    </style>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Tailwind builds this page's styles in the browser. Keep the page hidden until it has,
+        // so it never opens as a white or unstyled flash, and show it anyway after 3s.
+        (function revealWhenStyled(start) {
+            const styled = [...document.querySelectorAll('style')].some((s) => s.textContent.includes('tailwindcss v'));
+            if (styled || performance.now() - start > 3000) document.documentElement.classList.add('styled');
+            else requestAnimationFrame(() => revealWhenStyled(start));
+        })(performance.now());
+    </script>
     <style>
         /* Fallback camera background */
         .animated-bg {
@@ -1032,6 +1055,9 @@
                 menu.classList.add('hidden');
             }
         });
+
+        // Lets the installed app open without a connection; the worker only handles this page.
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('parallel-live-sw.js', { scope: 'parallel-live' }).catch(() => {});
     </script>
 </body>
 </html>
