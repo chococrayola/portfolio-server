@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Parallel Live Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Fallback camera background */
+        .animated-bg {
+            background: linear-gradient(-45deg, #1e293b, #0f172a, #334155, #000000);
+            background-size: 400% 400%;
+            animation: grad 15s ease infinite;
+        }
+        @keyframes grad { 0% {background-position: 0% 50%} 50% {background-position: 100% 50%} 100% {background-position: 0% 50%} }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .mask-chat { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%); }
+
+        /* --- EXACT IG/PARALLEL LIVE SPECS --- */
+        .ig-live-badge {
+            background: linear-gradient(45deg, #D62976 0%, #962FBF 100%);
+            border-radius: 3px;
+            height: 18px;
+            padding: 4px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        @keyframes comment-in {
+            0% { opacity: 0; transform: translateY(10px) scale(0.95); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .new-comment { animation: comment-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        .comment-username { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 600; font-size: 13px; color: #FFFFFF; }
+        .comment-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 400; font-size: 13px; color: #FFFFFF; }
+
+        .live-comment-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 40%; pointer-events: none; z-index: 10;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0) 100%);
+        }
+
+        .comment-bubble {
+            background-color: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 6px 10px;
+            margin-bottom: 4px;
+        }
+
+        /* Floating Hearts */
+        .heart { position: absolute; bottom: 80px; right: 15px; animation: heartFloat 2.5s ease-out forwards; pointer-events: none; z-index: 50; }
+        @keyframes heartFloat {
+            0% { transform: translateY(0) scale(0.8); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translateY(-400px) translateX(calc(-20px + 40px * var(--rnd))) scale(1.5); opacity: 0; }
+        }
+
+        /* Side Tools */
+        .side-tool-btn {
+            width: 36px; height: 36px; display: flex; justify-content: center; align-items: center;
+            color: white; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); transition: transform 0.2s, opacity 0.2s;
+        }
+        .side-tool-btn:active { transform: scale(0.9); }
+        .icon-disabled { opacity: 0.4; position: relative; }
+        .icon-disabled::after {
+            content: ''; position: absolute; top: 50%; left: 50%; width: 24px; height: 2px; background-color: white;
+            transform: translate(-50%, -50%) rotate(45deg); border-radius: 1px; box-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+
+        /* Parallel Live Settings Menu Style */
+        .app-input {
+            background: #1c1c1e; border: 1px solid #2c2c2e; color: white; width: 100%;
+            padding: 12px 16px; border-radius: 10px; font-size: 15px; outline: none;
+        }
+        .app-input:focus { border-color: #D62976; }
+    </style>
+</head>
+<body class="bg-black text-white font-sans overflow-hidden">
+
+    <div id="setup-screen" class="fixed inset-0 z-50 flex flex-col bg-[#000000] overflow-y-auto">
+        <header class="p-4 flex justify-between items-center bg-[#121212] border-b border-[#2c2c2e] sticky top-0 shadow-md">
+            <span class="text-base font-bold tracking-wide">Parallel Setup</span>
+            <button onclick="requestPermissions()" class="text-[#D62976] font-bold text-sm uppercase tracking-wide">Start Live</button>
+        </header>
+
+        <div class="p-5 space-y-6 max-w-md mx-auto w-full pb-10">
+            <div class="flex flex-col items-center mt-2">
+                <div id="pfp-preview" class="w-24 h-24 rounded-full border-2 border-[#D62976] p-1 mb-2 cursor-pointer relative group shadow-[0_0_15px_rgba(214,41,118,0.3)]">
+                    <div class="w-full h-full rounded-full bg-[#1c1c1e] flex items-center justify-center overflow-hidden">
+                        <svg class="w-10 h-10 text-zinc-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    </div>
+                    <label class="absolute inset-0 rounded-full bg-black/50 hidden group-hover:flex items-center justify-center cursor-pointer transition">
+                        <span class="text-xs font-bold text-white">Edit</span>
+                        <input type="file" id="pfp-input" accept="image/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-zinc-500 uppercase ml-2 tracking-wider">Profile</h3>
+                <input type="text" id="username-input" placeholder="Username (e.g. jake_smith)" oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_.]/g, '')" class="app-input">
+
+                <div class="flex items-center justify-between bg-[#1c1c1e] border border-[#2c2c2e] p-4 rounded-xl">
+                    <span class="text-sm font-semibold">Verified Badge</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="verified-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D62976]"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-zinc-500 uppercase ml-2 tracking-wider">Simulation</h3>
+
+                <div class="relative">
+                    <label class="absolute text-[10px] text-zinc-400 top-1.5 left-4 uppercase font-bold tracking-wider">Initial Viewers</label>
+                    <input type="number" id="initial-viewers" value="150" class="app-input pt-6 pb-2 font-bold text-lg" placeholder="e.g. 1500">
+                </div>
+
+                <div class="bg-[#1c1c1e] border border-[#2c2c2e] p-4 rounded-xl space-y-4">
+                    <div>
+                        <div class="flex justify-between text-xs text-zinc-400 mb-2"><span>Comment Flow</span><span id="setup-comment-val" class="font-bold text-[#D62976]">Normal</span></div>
+                        <input type="range" id="setup-comment-speed" min="1" max="5" value="3" class="w-full accent-[#D62976]" oninput="updateSetupLabels()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center mt-4">
+                <p class="text-[10px] text-red-400/80 font-bold uppercase tracking-wider leading-relaxed">
+                    All clout, fame, hype, or engagement is simulated/fake. There are no real users on the app other than you.
+                </p>
+            </div>
+
+            <button onclick="requestPermissions()" class="w-full bg-gradient-to-r from-[#D62976] to-[#962FBF] py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform mt-2">
+                GO LIVE
+            </button>
+        </div>
+    </div>
+
+    <div id="loading-screen" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950">
+        <div class="w-12 h-12 border-4 border-[#2c2c2e] border-t-[#D62976] rounded-full animate-spin mb-4"></div>
+        <p class="text-sm text-zinc-400 font-semibold animate-pulse">Initializing Camera...</p>
+    </div>
+
+    <div id="live-ui" class="hidden relative h-screen w-screen bg-zinc-900 flex flex-col justify-between">
+
+        <div id="video-backdrop" class="absolute inset-0 animated-bg z-0 transition-opacity duration-300"></div>
+        <video id="camera-feed" autoplay muted playsinline class="absolute inset-0 w-full h-full object-cover z-0 hidden transition-opacity duration-300"></video>
+
+        <div class="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none"></div>
+        <div class="live-comment-overlay"></div>
+
+        <div class="absolute top-[12px] left-[12px] right-3 z-30 flex justify-between items-start pointer-events-none">
+            <div class="flex flex-wrap items-center gap-2 pointer-events-auto relative">
+
+                <div class="flex items-center space-x-2 bg-black/40 backdrop-blur-md rounded-full pr-3 pl-1 py-1">
+                    <img id="active-pfp" class="w-7 h-7 rounded-full object-cover bg-zinc-800">
+                    <span id="active-name" class="font-semibold text-[13px] tracking-tight"></span>
+                    <svg id="active-badge" class="w-3.5 h-3.5 text-blue-500 hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-8 8z"/></svg>
+                </div>
+
+                <div class="ig-live-badge">LIVE</div>
+
+                <div onclick="toggleSecretMenu()" class="bg-black/40 backdrop-blur-md px-2 py-1 rounded-sm flex items-center space-x-1.5 shadow-sm h-[18px] cursor-pointer hover:bg-black/60 transition active:scale-95">
+                    <svg class="w-3.5 h-3.5 text-white/90" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                    <span id="viewer-count" class="text-[11px] font-bold text-white leading-none mt-px">0</span>
+                </div>
+
+                <div id="secret-menu" class="hidden absolute top-10 left-0 w-64 bg-[#1c1c1e]/95 backdrop-blur-xl border border-[#2c2c2e] rounded-xl p-4 shadow-2xl z-50">
+                    <h3 class="text-xs font-bold text-[#D62976] uppercase tracking-wider mb-4 border-b border-[#2c2c2e] pb-2">Creator God Mode</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs mb-1 block text-zinc-400 font-semibold">Override Viewers</label>
+                            <input type="number" id="override-viewers" class="w-full bg-black border border-[#2c2c2e] rounded-lg p-3 text-sm text-white font-bold outline-none focus:border-[#D62976]" placeholder="Enter number...">
+                            <button onclick="applySecretViewers()" class="w-full mt-3 bg-[#D62976] hover:bg-[#962FBF] py-2 rounded-lg text-xs font-bold tracking-wider uppercase transition-colors">Apply Override</button>
+                        </div>
+                        <div class="border-t border-[#2c2c2e] pt-4 mt-2">
+                            <div class="flex justify-between text-xs mb-2 text-zinc-400 font-semibold"><span>Comment Flow</span><span id="live-comment-val" class="font-bold text-[#D62976]">Normal</span></div>
+                            <input type="range" id="live-comment-speed" min="1" max="5" value="3" class="w-full accent-[#D62976]" oninput="updateLiveSpeeds()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="location.reload()" class="pointer-events-auto p-1 text-white/90 drop-shadow-md hover:scale-110 transition">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div class="absolute right-3 top-[30%] flex flex-col space-y-5 z-30 pointer-events-auto">
+            <button id="btn-mic" onclick="toggleTool('btn-mic')" class="side-tool-btn"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+            <button id="btn-video" onclick="toggleVideoFeed()" class="side-tool-btn"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
+            <button id="btn-flip" onclick="flipCamera()" class="side-tool-btn"><svg id="flip-icon" class="w-6 h-6 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24"><path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm-3.2-5c0 1.77 1.43 3.2 3.2 3.2s3.2-1.43 3.2-3.2-1.43-3.2-3.2-3.2-3.2 1.43-3.2 3.2z"/><path d="M12 11l-1.5 1.5L12 14v-2c1.1 0 2 .9 2 2h2c0-2.21-1.79-4-4-4z"/></svg></button>
+        </div>
+
+        <div class="absolute bottom-16 inset-x-0 p-4 h-[40%] flex flex-col justify-end z-20 pointer-events-none">
+            <div id="system-msg" class="bg-[#1c1c1e]/80 backdrop-blur text-white text-xs px-3 py-2 rounded-lg mb-3 self-start max-w-[80%] opacity-0 transition-opacity duration-1000 shadow-sm border border-[#2c2c2e]">
+                We're telling your followers that you've started a live video.
+            </div>
+            <div id="chat-stream" class="space-y-1 overflow-y-auto hide-scrollbar mask-chat pointer-events-auto pb-2"></div>
+        </div>
+
+        <div class="absolute bottom-0 inset-x-0 p-4 z-30 flex items-center space-x-3 pointer-events-auto">
+            <div class="flex-1 relative">
+                <input type="text" id="my-comment-input" placeholder="Add a comment..." onkeypress="handleMyComment(event)" class="w-full bg-transparent border border-white/40 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:border-white transition placeholder-white/70">
+                <button class="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/></svg></button>
+            </div>
+            <div class="flex space-x-3 items-center">
+                <button class="w-8 h-8 flex items-center justify-center text-white drop-shadow-md hover:opacity-80"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button>
+                <button class="w-8 h-8 flex items-center justify-center text-white drop-shadow-md hover:opacity-80"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg></button>
+            </div>
+        </div>
+
+        <div id="heart-fountain" class="absolute inset-0 pointer-events-none overflow-hidden z-20"></div>
+    </div>
+
+    <script>
+        let pfpData = "";
+        let viewerCount = 150;
+        let commentInterval, viewerInterval;
+        let isLive = false;
+        let streamAccess = null;
+
+        const cLabels = ["Snail", "Slow", "Normal", "Fast", "Hyper"];
+        const genericAvatarSVG = `<svg class="w-4 h-4 text-zinc-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+
+        const botComments = [
+            { user: "jake_smith22", text: "Yooo what's up!", verified: false },
+            { user: "sarah.tones", text: "Love the setup 😍", verified: true },
+            { user: "gamerbro99", text: "first", verified: false },
+            { user: "daily_memes_ig", text: "Bro is glowing", verified: true },
+            { user: "alex_w", text: "Hi from New York!", verified: false },
+            { user: "chloe_vibes", text: "Can you say hi to me?", verified: false },
+            { user: "tech.insider", text: "Quality looks really crisp", verified: true },
+            { user: "user_88329", text: "🔥🔥🔥", verified: false }
+        ];
+
+        function updateSetupLabels() {
+            const cSpeed = parseInt(document.getElementById('setup-comment-speed').value);
+            document.getElementById('setup-comment-val').innerText = cLabels[cSpeed - 1];
+        }
+
+        document.getElementById('pfp-input').onchange = (e) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                pfpData = ev.target.result;
+                document.getElementById('pfp-preview').innerHTML = `<img src="${pfpData}" class="w-full h-full object-cover rounded-full">`;
+            };
+            if(e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+        };
+
+        function toggleTool(id) { document.getElementById(id).classList.toggle('icon-disabled'); }
+        function toggleVideoFeed() {
+            const btn = document.getElementById('btn-video');
+            btn.classList.toggle('icon-disabled');
+            const feed = document.getElementById('camera-feed');
+            const bg = document.getElementById('video-backdrop');
+            if (btn.classList.contains('icon-disabled')) { feed.style.opacity = '0'; bg.style.opacity = '1'; }
+            else { feed.style.opacity = '1'; bg.style.opacity = '0'; }
+        }
+        let flipState = 0;
+        function flipCamera() { flipState += 180; document.getElementById('flip-icon').style.transform = `rotate(${flipState}deg)`; }
+
+        async function requestPermissions() {
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('loading-screen').classList.remove('hidden');
+
+            try {
+                streamAccess = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const videoFeed = document.getElementById('camera-feed');
+                videoFeed.srcObject = streamAccess;
+                videoFeed.classList.remove('hidden');
+                document.getElementById('video-backdrop').style.opacity = '0';
+            } catch (err) {
+                console.warn("Camera denied.");
+                document.getElementById('video-backdrop').style.opacity = '1';
+            }
+
+            document.getElementById('loading-screen').classList.add('hidden');
+            startLiveUI();
+        }
+
+        function startLiveUI() {
+            const username = document.getElementById('username-input').value || "creator_name";
+            document.getElementById('active-name').innerText = username;
+            if (document.getElementById('verified-toggle').checked) document.getElementById('active-badge').classList.remove('hidden');
+            if (pfpData) { document.getElementById('active-pfp').src = pfpData; } else { document.getElementById('active-pfp').classList.add('hidden'); }
+
+            viewerCount = parseInt(document.getElementById('initial-viewers').value) || 150;
+            updateViewerDisplay();
+
+            document.getElementById('live-comment-speed').value = document.getElementById('setup-comment-speed').value;
+
+            document.getElementById('live-ui').classList.remove('hidden');
+            isLive = true;
+
+            setTimeout(() => { document.getElementById('system-msg').classList.remove('opacity-0'); }, 1000);
+            setTimeout(() => { document.getElementById('system-msg').classList.add('opacity-0'); }, 5000);
+
+            updateLiveSpeeds();
+
+            viewerInterval = setInterval(() => {
+                const change = Math.floor(Math.random() * 9) - 4;
+                viewerCount = Math.max(1, viewerCount + change);
+                updateViewerDisplay();
+            }, 3000);
+        }
+
+        function toggleSecretMenu() {
+            document.getElementById('secret-menu').classList.toggle('hidden');
+            document.getElementById('override-viewers').value = viewerCount;
+        }
+
+        function applySecretViewers() {
+            const newVal = parseInt(document.getElementById('override-viewers').value);
+            if (!isNaN(newVal)) {
+                viewerCount = newVal;
+                updateViewerDisplay();
+            }
+            document.getElementById('secret-menu').classList.add('hidden');
+        }
+
+        function updateLiveSpeeds() {
+            if (!isLive) return;
+            if (commentInterval) clearInterval(commentInterval);
+            const cSpeedVal = parseInt(document.getElementById('live-comment-speed').value);
+            document.getElementById('live-comment-val').innerText = cLabels[cSpeedVal - 1];
+            const cTimerMap = { 1: 4500, 2: 2500, 3: 1500, 4: 800, 5: 300 };
+            commentInterval = setInterval(spawnBotComment, cTimerMap[cSpeedVal]);
+        }
+
+        function updateViewerDisplay() {
+            let displayCount = viewerCount;
+            if (viewerCount >= 10000) { displayCount = (viewerCount / 1000).toFixed(1) + 'K'; }
+            else { displayCount = viewerCount.toLocaleString(); }
+            document.getElementById('viewer-count').innerText = displayCount;
+        }
+
+        function spawnBotComment() {
+            if (!isLive) return;
+            const data = botComments[Math.floor(Math.random() * botComments.length)];
+            appendComment(data.user, data.text, data.verified, false);
+            if (Math.random() > 0.4) autoHeart();
+        }
+
+        function handleMyComment(e) {
+            if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                const text = e.target.value.trim();
+                e.target.value = '';
+                const username = document.getElementById('username-input').value || "creator_name";
+                const isVerified = document.getElementById('verified-toggle').checked;
+                appendComment(username, text, isVerified, true);
+            }
+        }
+
+        function appendComment(username, text, isVerified, isSelf) {
+            const stream = document.getElementById('chat-stream');
+            const div = document.createElement('div');
+            div.className = "flex items-start space-x-2 new-comment comment-bubble w-max max-w-[85%]";
+            let avatarHtml = genericAvatarSVG;
+            if (isSelf && pfpData) avatarHtml = `<img src="${pfpData}" class="w-full h-full object-cover">`;
+
+            div.innerHTML = `
+                <div class="flex-shrink-0 w-6 h-6 rounded-full bg-[#1c1c1e] overflow-hidden flex items-center justify-center mt-0.5 border border-[#2c2c2e]">
+                    ${avatarHtml}
+                </div>
+                <div class="leading-snug">
+                    <span class="comment-username">${username}${isVerified ? ' <span class="text-blue-400 text-[10px] inline-block -translate-y-px">✓</span>' : ''}</span>
+                    <span class="comment-text ml-1">${text}</span>
+                </div>
+            `;
+            stream.appendChild(div);
+            stream.scrollTop = stream.scrollHeight;
+            if (stream.childElementCount > 25) stream.removeChild(stream.firstChild);
+        }
+
+        function autoHeart() {
+            if (!isLive) return;
+            const fountain = document.getElementById('heart-fountain');
+            const heart = document.createElement('div');
+            heart.className = "heart text-2xl absolute drop-shadow-lg";
+            heart.style.setProperty('--rnd', Math.random());
+            const emojis = ["❤️", "❤️", "💖", "🔥", "💯"];
+            heart.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+            heart.style.right = (15 + Math.random() * 30) + 'px';
+            fountain.appendChild(heart);
+            setTimeout(() => heart.remove(), 2500);
+        }
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('secret-menu');
+            if (!e.target.closest('.relative') && !menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
