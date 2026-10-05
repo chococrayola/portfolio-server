@@ -91,6 +91,9 @@
 </head>
 <body class="bg-black text-white font-sans overflow-hidden">
 
+    <!-- Blue verified badge, shared by the host's name and verified commenters -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true"><symbol id="verified-seal" viewBox="0 0 24 24"><path fill="#0095F6" d="M12 2.7Q15.16 0.22 16.65 3.95Q20.63 3.37 20.05 7.35Q23.78 8.84 21.3 12Q23.78 15.16 20.05 16.65Q20.63 20.63 16.65 20.05Q15.16 23.78 12 21.3Q8.84 23.78 7.35 20.05Q3.37 20.63 3.95 16.65Q0.22 15.16 2.7 12Q0.22 8.84 3.95 7.35Q3.37 3.37 7.35 3.95Q8.84 0.22 12 2.7Z"/><path d="M7.8 12.3l2.9 2.9 5.6-5.8" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol></svg>
+
     <div id="setup-screen" class="fixed inset-0 z-50 flex flex-col bg-[#000000] overflow-y-auto">
         <header class="p-4 flex justify-between items-center bg-[#121212] border-b border-[#2c2c2e] sticky top-0 shadow-md">
             <span class="text-base font-bold tracking-wide">Parallel Setup</span>
@@ -170,7 +173,7 @@
                 <div class="flex items-center space-x-2 min-w-0 max-w-full bg-black/40 backdrop-blur-md rounded-full pr-3 pl-1 py-1">
                     <img id="active-pfp" class="w-7 h-7 flex-shrink-0 rounded-full object-cover bg-zinc-800">
                     <span id="active-name" class="truncate font-semibold text-[13px] tracking-tight"></span>
-                    <svg id="active-badge" class="w-3.5 h-3.5 flex-shrink-0 text-blue-500 hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-8 8z"/></svg>
+                    <svg id="active-badge" class="w-3.5 h-3.5 flex-shrink-0 hidden" role="img" aria-label="Verified"><use href="#verified-seal"/></svg>
                     <button aria-label="Live details" class="flex-shrink-0 text-white"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5l6 6 6-6"/></svg></button>
                 </div>
 
@@ -243,23 +246,264 @@
     <script>
         let pfpData = "";
         let viewerCount = 150;
-        let commentInterval, viewerInterval;
+        let commentTimer, viewerInterval;
         let isLive = false;
         let streamAccess = null;
 
         const cLabels = ["Snail", "Slow", "Normal", "Fast", "Hyper"];
         const genericAvatarSVG = `<svg class="w-4 h-4 text-zinc-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
 
-        const botComments = [
-            { user: "jake_smith22", text: "Yooo what's up!", verified: false },
-            { user: "sarah.tones", text: "Love the setup 😍", verified: true },
-            { user: "gamerbro99", text: "first", verified: false },
-            { user: "daily_memes_ig", text: "Bro is glowing", verified: true },
-            { user: "alex_w", text: "Hi from New York!", verified: false },
-            { user: "chloe_vibes", text: "Can you say hi to me?", verified: false },
-            { user: "tech.insider", text: "Quality looks really crisp", verified: true },
-            { user: "user_88329", text: "🔥🔥🔥", verified: false }
+        // ---- Simulated audience: who comments and what they say ----
+        // Mostly Puerto Rican and Latino viewers, chatting in Spanish, English and Spanglish.
+        const viewerNames = [
+            "yarielis.m", "gabyy.rivera", "kevin_ortiz787", "naty.colon_", "jdiaz.07", "itsmelanie.r",
+            "brii.santiago", "el_kike23", "carlitos.pr", "andreaa.mtz", "luisito_rmz", "sofi.vega",
+            "dayana__c", "josean.fit", "pao.lamisma", "keishla.rosado", "mikeyy.cruz", "nalaa.jpg",
+            "jay.morales_", "valee.ortiz", "chris.lopez98", "isabelle.nv", "_marcos.f", "emilynieves_",
+            "tati.burgos", "angel.dvd", "cami.cruzz", "omar.figueroa_", "xiomy.p", "deivid_pr",
+            "nicolee.mar", "yeii.mendez", "ashley.torress", "fer.acevedo", "sammy_rdz", "glorimar.n",
+            "jean.carlos.7", "alanis_vr", "edwin.santos21", "mari.alejandra", "bryan_qp", "lu.maldonado",
+            "zuleyka.r", "anthony.velez_", "frankie.pr", "joselyn.mrrro", "ricky_02", "kiara.bonilla",
+            "tommy.agosto", "dani.sierra_", "yadiel.cs", "michelle.rz", "jorgeee.l", "britt.ayala",
+            "neysha.c", "victor.manuel.pr", "steph.roman_", "abby.figue", "manny.ocasio", "coral.reyes"
         ];
+        // Creator accounts with the blue badge; they only drop in now and then.
+        const verifiedNames = [
+            "marisol.cocina.pr", "kaneko.beats", "lunavibes.studio", "andrea.fitlab", "isladelsabor.co",
+            "gabo.comedia.pr", "tropicalwaves.fm", "mariela.creates", "viajandoconleo", "nicoleglam.mua"
+        ];
+        const chatLines = [
+            "holaaa 👋", "wepaaa 🇵🇷", "saludos desde Bayamón!!", "saludos desde Ponce 🙌", "Caguas presente 🙋‍♀️",
+            "desde Mayagüez mirando 👀", "Arecibo en la casa 🏠", "saludos desde Orlando!! 🇵🇷", "acho q brutal",
+            "ya llegué jajaja", "qué es la que hay 🔥", "dímelo 🙌", "estás brutal", "jajajajaja", "jajaja no puedo 😂",
+            "ay bendito 🥺", "pa' cuando el próximo live?", "salúdame plis 🥺", "saludos a todos los del live",
+            "q calor hace hoy jaja", "nítido 🙌", "eso es así!!", "bendiciones 🙏", "de dónde eres?",
+            "qué canción es esa?", "me encanta 😍", "uff 🔥🔥", "qué chévere", "otro live? 😂 me encanta",
+            "esto está buenísimo", "dale share al live 🙌", "llegué tarde, ¿qué me perdí?", "te sigo desde hace tiempo ❤️",
+            "mi mamá también te sigue jaja", "q bueno verte en live", "diache 😂", "te quiero mucho ❤️", "me muero 😂😂",
+            "qué bien te ves", "eso!! 👏👏", "pa'lante siempre 💪", "dónde compraste eso?", "jajaja tú eres un caso",
+            "q lindo todo 😍", "no me lo esperaba 😂", "brutal el live de hoy",
+            "hiii 👋", "omg hiii", "first time catching u live 😭", "hello from NJ 👋", "hi from Florida!!",
+            "love this 😍", "this is so cute", "lmaooo 😭", "what song is this??", "can u say hi to me 🥺",
+            "the vibes rn 🔥", "ok but this is fire", "u look so good", "just got here what did i miss",
+            "go live more often pls", "facts", "real 😂", "sameee", "im crying 😭😭", "ur so funny",
+            "can u do a q&a?", "where did u get that??", "i love ur content", "notification squad 🔔",
+            "late but here!!", "hi from Texas 🤠", "the lighting tho 😍", "wait what 😂", "this made my day",
+            "obsessed", "yesss", "no wayyy", "shoutout pls 🥺", "ur energy is everything ✨",
+            "🔥🔥🔥", "😍😍", "❤️❤️❤️", "🙌🙌", "😂😂😂", "👏👏", "💯", "🥰", "😭😭", "👀"
+        ];
+        // Answers to whoever commented just before ("@name same 😂").
+        const replyLines = ["same 😂", "jajaja verdad", "x2", "fr 😭", "lmaooo", "jajaja exacto", "yesss", "hola!! 👋", "facts", "ikr 😂", "jaja q dices", "real"];
+        const verifiedLines = [
+            "Love this energy! 🔥", "Wepa!! 🇵🇷🙌", "Proud of you 👏👏", "Saludos desde el estudio 🎧", "Keep it up ❤️",
+            "Qué nítido este live 😍", "Collab pronto? 👀", "Just tuned in, this is great", "Dale que vas bien 💪",
+            "Obsessed with this 😍", "Saludos a todos 🙌", "Count me in next time!"
+        ];
+        const verifiedBadge = `<svg class="inline-block w-3.5 h-3.5 ml-0.5 align-[-2px]" width="14" height="14" role="img" aria-label="Verified"><use href="#verified-seal"/></svg>`;
+
+        // ---- Simulated audience: profile pictures ----
+        // Each viewer gets a small generated photo (mostly selfies, some scenery or
+        // pet/hobby pics, a few default avatars), seeded by username so they keep
+        // the same picture all stream. Nothing is fetched and no real faces are used.
+        const avatarCache = new Map();
+
+        function seededRandom(str) {
+            let h = 1779033703 ^ str.length;
+            for (let i = 0; i < str.length; i++) {
+                h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+                h = (h << 13) | (h >>> 19);
+            }
+            return () => {
+                h = Math.imul(h ^ (h >>> 16), 2246822507);
+                h = Math.imul(h ^ (h >>> 13), 3266489909);
+                return ((h ^= h >>> 16) >>> 0) / 4294967296;
+            };
+        }
+
+        function shade(hex, amount) { // amount in -1..1; negative darkens
+            const n = parseInt(hex.slice(1), 16);
+            const ch = (v) => Math.round(amount < 0 ? v * (1 + amount) : v + (255 - v) * amount);
+            return `rgb(${ch(n >> 16)}, ${ch((n >> 8) & 255)}, ${ch(n & 255)})`;
+        }
+
+        function avatarFor(username) {
+            if (avatarCache.has(username)) return avatarCache.get(username);
+            const rand = seededRandom(username);
+            const pick = (list) => list[Math.floor(rand() * list.length)];
+            const kind = rand();
+            let url = null; // null: no photo, so the default avatar shows
+            if (kind >= 0.07) {
+                const S = 84;
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = S;
+                const g = canvas.getContext('2d');
+                if (kind < 0.17) drawScenery(g, S, rand, pick);
+                else if (kind < 0.25) drawThing(g, S, rand, pick);
+                else drawSelfie(g, S, rand, pick);
+                finishPhoto(g, canvas, S, rand);
+                url = canvas.toDataURL('image/jpeg', 0.85);
+            }
+            avatarCache.set(username, url);
+            return url;
+        }
+
+        function drawSelfie(g, S, rand, pick) {
+            const ellipse = (x, y, a, b, start = 0, end = Math.PI * 2) => { g.beginPath(); g.ellipse(x, y, a, b, 0, start, end); g.fill(); };
+            const [wall1, wall2] = pick([['#d9cbb8', '#a8957f'], ['#cfc9c1', '#8f8a83'], ['#b4c4d4', '#6f87a0'], ['#ead7d1', '#b8968c'],
+                ['#c3d2b8', '#7f9a72'], ['#8fc1ec', '#d8ebf8'], ['#2c2142', '#0f0b1a'], ['#f2c48d', '#c9745a']]);
+            let grad = g.createLinearGradient(0, 0, S * (0.3 + rand() * 0.7), S);
+            grad.addColorStop(0, wall1);
+            grad.addColorStop(1, wall2);
+            g.fillStyle = grad;
+            g.fillRect(0, 0, S, S);
+            for (let i = 0; i < 4; i++) { // out-of-focus lights behind
+                g.fillStyle = `rgba(255, 255, 255, ${0.06 + rand() * 0.14})`;
+                ellipse(rand() * S, rand() * S * 0.6, S * (0.06 + rand() * 0.16), S * (0.06 + rand() * 0.16));
+            }
+            const skin = pick(['#f3d3bd', '#eabb9b', '#dca883', '#cf9670', '#c08259', '#a86d48', '#8d5636', '#6e4027', '#55301d']);
+            const hair = pick(['#16110e', '#231914', '#2f2219', '#3f2c1f', '#5a3e2b', '#7b5638', '#a77c4f', '#d3b07a', '#8e3b26']);
+            const top = pick(['#151515', '#f0f0f0', '#2b2f3a', '#7a1f2b', '#1f3a5f', '#3d5a40', '#c9a227', '#d9d4cc', '#5b3f8c', '#d35454', '#4a90a4', '#e8a0b5']);
+            const style = pick(['short', 'short', 'long', 'long', 'long', 'bun', 'curly', 'buzz', 'cap']);
+
+            g.save(); // selfie framing: a little off-centre, tilted and zoomed
+            g.translate(S * (0.5 + (rand() - 0.5) * 0.14), S * (0.5 + (rand() - 0.4) * 0.08));
+            g.rotate((rand() - 0.5) * 0.25);
+            const zoom = 1 + rand() * 0.25;
+            g.scale(zoom, zoom);
+            g.translate(-S / 2, -S / 2);
+
+            const hx = S * 0.5, hy = S * 0.42, rx = S * 0.19, ry = S * 0.235;
+            g.fillStyle = hair;
+            if (style === 'long') ellipse(hx, hy + ry * 0.55, rx * 1.38, ry * 1.5); // falls behind the shoulders
+            g.fillStyle = top;
+            ellipse(hx, S * 1.05, S * 0.46, S * 0.3);
+            g.fillStyle = shade(skin, -0.15);
+            g.fillRect(hx - S * 0.07, hy + ry * 0.55, S * 0.14, S * 0.18);
+            if (style !== 'long') { // ears
+                ellipse(hx - rx * 0.97, hy + ry * 0.05, rx * 0.15, ry * 0.2);
+                ellipse(hx + rx * 0.97, hy + ry * 0.05, rx * 0.15, ry * 0.2);
+            }
+            grad = g.createRadialGradient(hx - rx * 0.35, hy - ry * 0.3, rx * 0.15, hx, hy, ry * 1.1);
+            grad.addColorStop(0, shade(skin, 0.1));
+            grad.addColorStop(1, shade(skin, -0.15));
+            g.fillStyle = grad;
+            ellipse(hx, hy, rx, ry);
+
+            g.fillStyle = hair;
+            if (style === 'curly') {
+                for (let i = 0; i < 9; i++) {
+                    const a = Math.PI * (1.02 + i * 0.12);
+                    ellipse(hx + Math.cos(a) * rx * 1.05, hy - ry * 0.2 + Math.sin(a) * ry * 0.9, rx * 0.42, rx * 0.42);
+                }
+            } else if (style === 'cap') {
+                g.fillStyle = pick(['#151515', '#c0392b', '#1f3a5f', '#f0f0f0', '#3d5a40']);
+                ellipse(hx, hy - ry * 0.42, rx * 1.12, ry * 0.72, Math.PI, Math.PI * 2);
+                g.fillRect(hx - rx * 1.1, hy - ry * 0.48, rx * 2.5, ry * 0.15); // brim
+            } else {
+                if (style === 'buzz') g.globalAlpha = 0.7;
+                ellipse(hx, hy - ry * 0.28, rx * 1.07, ry * 0.8, Math.PI, Math.PI * 2);
+                if (style === 'short') { // sideburns, so it reads as hair rather than a helmet
+                    ellipse(hx - rx * 0.9, hy - ry * 0.18, rx * 0.2, ry * 0.32);
+                    ellipse(hx + rx * 0.9, hy - ry * 0.18, rx * 0.2, ry * 0.32);
+                }
+                if (style === 'bun') ellipse(hx, hy - ry * 1.08, rx * 0.46, rx * 0.42);
+                if (style === 'long') {
+                    ellipse(hx - rx * 0.92, hy + ry * 0.15, rx * 0.28, ry * 0.8);
+                    ellipse(hx + rx * 0.92, hy + ry * 0.15, rx * 0.28, ry * 0.8);
+                }
+                g.globalAlpha = 1;
+            }
+
+            if (rand() < 0.15) { // sunglasses
+                g.fillStyle = '#121212';
+                ellipse(hx - rx * 0.42, hy, rx * 0.36, ry * 0.18);
+                ellipse(hx + rx * 0.42, hy, rx * 0.36, ry * 0.18);
+                g.fillRect(hx - rx * 0.1, hy - ry * 0.05, rx * 0.2, ry * 0.06);
+            } else {
+                g.fillStyle = 'rgba(30, 20, 15, 0.85)';
+                ellipse(hx - rx * 0.4, hy, S * 0.017, S * 0.02);
+                ellipse(hx + rx * 0.4, hy, S * 0.017, S * 0.02);
+            }
+            g.strokeStyle = shade(skin, -0.35);
+            g.lineWidth = S * 0.014;
+            g.beginPath();
+            g.arc(hx, hy + ry * 0.32, rx * 0.32, 0.2 * Math.PI, 0.8 * Math.PI);
+            g.stroke();
+            g.restore();
+        }
+
+        function drawScenery(g, S, rand, pick) {
+            const sky = (stops) => {
+                const grad = g.createLinearGradient(0, 0, 0, S);
+                stops.forEach(([at, color]) => grad.addColorStop(at, color));
+                g.fillStyle = grad;
+                g.fillRect(0, 0, S, S);
+            };
+            const scene = pick(['sunset', 'beach', 'mountains', 'city']);
+            if (scene === 'sunset') {
+                sky([[0, '#2d3a6e'], [0.45, '#e46a8a'], [0.68, '#f6a35b']]);
+                g.fillStyle = '#ffd98a';
+                g.beginPath(); g.arc(S * (0.35 + rand() * 0.3), S * 0.66, S * 0.13, 0, Math.PI * 2); g.fill();
+                g.fillStyle = '#26365f';
+                g.fillRect(0, S * 0.68, S, S);
+                g.fillStyle = 'rgba(255, 210, 140, 0.5)';
+                for (let y = 0.72; y < 1; y += 0.07) g.fillRect(S * (0.35 + rand() * 0.15), S * y, S * (0.12 + rand() * 0.15), S * 0.015);
+            } else if (scene === 'beach') {
+                sky([[0, '#5ea8e6'], [0.5, '#cfe8f7']]);
+                g.fillStyle = '#25aebd';
+                g.fillRect(0, S * 0.52, S, S * 0.2);
+                g.fillStyle = '#e8d2a4';
+                g.fillRect(0, S * 0.72, S, S);
+                g.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(S * rand(), S * (0.15 + rand() * 0.2), S * 0.12, S * 0.05, 0, 0, Math.PI * 2); g.fill(); }
+            } else if (scene === 'mountains') {
+                sky([[0, '#8fc0ea'], [0.7, '#eaf4fb']]);
+                const peak = (x, h, color) => { g.fillStyle = color; g.beginPath(); g.moveTo(x - S * 0.55, S); g.lineTo(x, S * (1 - h)); g.lineTo(x + S * 0.55, S); g.fill(); };
+                peak(S * (0.25 + rand() * 0.2), 0.6, '#8197b5');
+                peak(S * (0.6 + rand() * 0.2), 0.5, '#4d6283');
+                g.fillStyle = '#4f7a46';
+                g.fillRect(0, S * 0.86, S, S);
+            } else {
+                sky([[0, '#0e1430'], [1, '#2b1f4d']]);
+                for (let x = -2; x < S; x += S * (0.12 + rand() * 0.08)) {
+                    const w = S * (0.1 + rand() * 0.08), h = S * (0.3 + rand() * 0.45);
+                    g.fillStyle = '#0a0d1c';
+                    g.fillRect(x, S - h, w, h);
+                    g.fillStyle = 'rgba(255, 211, 107, 0.85)';
+                    for (let wy = S - h + 4; wy < S - 3; wy += 6) for (let wx = x + 3; wx < x + w - 3; wx += 5) if (rand() < 0.35) g.fillRect(wx, wy, 2, 2);
+                }
+            }
+        }
+
+        function drawThing(g, S, rand, pick) {
+            g.fillStyle = pick(['#f7d6e0', '#d6eaf7', '#e3f2d6', '#fbe7c6', '#e6dcf7', '#ffd8c2']);
+            g.fillRect(0, 0, S, S);
+            g.font = `${Math.round(S * 0.58)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillText(pick(['🐶', '🐱', '🐕', '🐈', '🌸', '🌺', '🌻', '☕', '🍓', '🏀', '⚽', '🎧', '🎮', '🌴', '🦋', '🚗', '🐾']), S / 2, S * 0.55);
+        }
+
+        function finishPhoto(g, canvas, S, rand) {
+            // Soften like a downscaled phone photo, then add light falloff and grain.
+            const soft = document.createElement('canvas');
+            soft.width = soft.height = S;
+            const sg = soft.getContext('2d');
+            sg.filter = 'blur(0.8px)';
+            sg.drawImage(canvas, -2, -2, S + 4, S + 4);
+            g.drawImage(soft, 0, 0);
+            const vignette = g.createRadialGradient(S / 2, S / 2, S * 0.3, S / 2, S / 2, S * 0.75);
+            vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            vignette.addColorStop(1, 'rgba(0, 0, 0, 0.28)');
+            g.fillStyle = vignette;
+            g.fillRect(0, 0, S, S);
+            const img = g.getImageData(0, 0, S, S);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const n = (rand() - 0.5) * 14;
+                img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
+            }
+            g.putImageData(img, 0, 0);
+        }
 
         function updateSetupLabels() {
             const cSpeed = parseInt(document.getElementById('setup-comment-speed').value);
@@ -322,6 +566,7 @@
 
             document.getElementById('live-ui').classList.remove('hidden');
             isLive = true;
+            lastVerifiedAt = Date.now(); // creators drop in later, not the moment the live starts
 
             setTimeout(() => { document.getElementById('system-msg').classList.remove('opacity-0'); }, 1000);
             setTimeout(() => { document.getElementById('system-msg').classList.add('opacity-0'); }, 5000);
@@ -351,11 +596,15 @@
 
         function updateLiveSpeeds() {
             if (!isLive) return;
-            if (commentInterval) clearInterval(commentInterval);
+            clearTimeout(commentTimer);
             const cSpeedVal = parseInt(document.getElementById('live-comment-speed').value);
             document.getElementById('live-comment-val').innerText = cLabels[cSpeedVal - 1];
             const cTimerMap = { 1: 4500, 2: 2500, 3: 1500, 4: 800, 5: 300 };
-            commentInterval = setInterval(spawnBotComment, cTimerMap[cSpeedVal]);
+            // Real chats arrive unevenly, so vary each gap around the chosen pace.
+            const scheduleNext = () => {
+                commentTimer = setTimeout(() => { spawnBotComment(); scheduleNext(); }, cTimerMap[cSpeedVal] * (0.3 + Math.random() * 1.4));
+            };
+            scheduleNext();
         }
 
         const compactCount = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }); // 15.3K, 2.5M
@@ -366,10 +615,31 @@
             document.getElementById('viewer-count').innerText = displayCount;
         }
 
+        const randomItem = (list) => list[Math.floor(Math.random() * list.length)];
+        const recentUsers = [], recentLines = [];
+        let lastVerifiedAt = 0;
+
+        // Picks from `list` while skipping the last `memory` picks, so nobody
+        // comments twice in a row and lines don't repeat back to back.
+        function pickFresh(list, recent, memory) {
+            let choice = randomItem(list);
+            for (let tries = 0; recent.includes(choice) && tries < 20; tries++) choice = randomItem(list);
+            recent.push(choice);
+            if (recent.length > memory) recent.shift();
+            return choice;
+        }
+
         function spawnBotComment() {
             if (!isLive) return;
-            const data = botComments[Math.floor(Math.random() * botComments.length)];
-            appendComment(data.user, data.text, data.verified, false);
+            // A verified creator drops in now and then: at most once every 20s, and only on some of those chances.
+            const verified = Date.now() - lastVerifiedAt > 20000 && Math.random() < 0.05;
+            if (verified) lastVerifiedAt = Date.now();
+            const user = verified ? randomItem(verifiedNames) : pickFresh(viewerNames, recentUsers, 8);
+            let text = verified ? randomItem(verifiedLines) : pickFresh(chatLines, recentLines, 15);
+            if (!verified && recentUsers.length > 1 && Math.random() < 0.08) {
+                text = `@${recentUsers[recentUsers.length - 2]} ${randomItem(replyLines)}`;
+            }
+            appendComment(user, text, verified, false);
             if (Math.random() > 0.4) autoHeart();
         }
 
@@ -386,16 +656,16 @@
         function appendComment(username, text, isVerified, isSelf) {
             const stream = document.getElementById('chat-stream');
             const div = document.createElement('div');
-            div.className = "flex items-start space-x-2 new-comment comment-bubble w-max max-w-[85%]";
-            let avatarHtml = genericAvatarSVG;
-            if (isSelf && pfpData) avatarHtml = `<img src="${pfpData}" class="w-full h-full object-cover">`;
+            div.className = "flex items-center space-x-2 new-comment comment-bubble w-max max-w-[85%]";
+            const photo = isSelf ? pfpData : avatarFor(username);
+            const avatarHtml = photo ? `<img src="${photo}" class="w-full h-full object-cover">` : genericAvatarSVG;
 
             div.innerHTML = `
-                <div class="flex-shrink-0 w-6 h-6 rounded-full bg-[#1c1c1e] overflow-hidden flex items-center justify-center mt-0.5 border border-[#2c2c2e]">
+                <div class="flex-shrink-0 w-7 h-7 rounded-full bg-[#1c1c1e] overflow-hidden flex items-center justify-center border border-[#2c2c2e]">
                     ${avatarHtml}
                 </div>
                 <div class="leading-snug">
-                    <span class="comment-username">${escapeHtml(username)}${isVerified ? ' <span class="text-blue-400 text-[10px] inline-block -translate-y-px">✓</span>' : ''}</span>
+                    <span class="comment-username">${escapeHtml(username)}${isVerified ? verifiedBadge : ''}</span>
                     <span class="comment-text ml-1">${escapeHtml(text)}</span>
                 </div>
             `;
