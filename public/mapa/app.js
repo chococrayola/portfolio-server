@@ -13,14 +13,21 @@ const PR_CENTER = [18.22, -66.4];
 const map = L.map('map', {
   center: PR_CENTER,
   zoom: 9,
+  zoomSnap: 0.5, // lets fitBounds pick a fractional zoom that fits narrow screens
   minZoom: 8,
   maxZoom: 18,
+  // Just a loose leash. A tall phone at minimum zoom shows ~4° of latitude, so
+  // bounds tighter than the screen stop Leaflet from panning at all (popups
+  // near the top then open half off-screen). minZoom keeps the island framed.
   maxBounds: [
-    [17.7, -67.6], // southwest
-    [18.7, -65.0], // northeast
+    [15.5, -70.5], // southwest
+    [21.0, -62.0], // northeast
   ],
   maxBoundsViscosity: 0.7,
 });
+
+// Start with the whole island in view (zoom 9 was wider than a phone screen).
+map.fitBounds([[17.85, -67.3], [18.55, -65.2]], { padding: [8, 8] });
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -184,11 +191,27 @@ for (const place of PLACES) {
     title: place.name,
   });
   // Bind as a function so every re-open reflects the current visited state.
-  marker.bindPopup(() => popupHtml(place), { maxWidth: 300 });
+  marker.bindPopup(() => popupHtml(place), {
+    maxWidth: 300,
+    autoPanPaddingTopLeft: [16, 16],
+    autoPanPaddingBottomRight: [16, 16],
+  });
   marker.addTo(layer);
   markersById[place.id] = { marker, place, category: cat };
   placed++;
 }
+
+// --- Pin size by zoom ------------------------------------------------------
+// With 100+ places, full-size pins pile on top of each other when the whole
+// island is in view (especially on phones). Shrink them when zoomed out.
+function updatePinScale() {
+  const z = map.getZoom();
+  const el = map.getContainer();
+  el.classList.toggle('pins-xs', z < 9);
+  el.classList.toggle('pins-sm', z >= 9 && z < 10.5);
+}
+map.on('zoomend', updatePinScale);
+updatePinScale();
 
 // --- Visited toggle wiring -------------------------------------------------
 
@@ -235,6 +258,7 @@ map.on('popupopen', (e) => {
 
 // --- Legend (doubles as layer toggles) -------------------------------------
 
+const LEGEND_KEY = 'mapa-leyenda-colapsada';
 const legend = L.control({ position: 'topright' });
 legend.onAdd = function () {
   const div = L.DomUtil.create('div', 'legend');
@@ -253,9 +277,29 @@ legend.onAdd = function () {
   }
 
   div.innerHTML = `
-    <div class="legend-head">Categorías</div>
-    ${rows}
-    <div class="legend-note"><b>✓</b> = ya visitado</div>`;
+    <button type="button" class="legend-toggle" aria-expanded="true">
+      <span class="legend-head">🗂️ Categorías</span>
+      <span class="legend-chevron" aria-hidden="true">▾</span>
+    </button>
+    <div class="legend-body">
+      ${rows}
+      <div class="legend-note"><b>✓</b> = ya visitado</div>
+    </div>`;
+
+  // Collapsible: starts collapsed on phones (the open legend covered most of
+  // the map), open on larger screens. The user's last choice is remembered.
+  const toggle = div.querySelector('.legend-toggle');
+  const setCollapsed = (collapsed, save) => {
+    div.classList.toggle('collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    if (save) {
+      try { localStorage.setItem(LEGEND_KEY, collapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+    }
+  };
+  let stored = null;
+  try { stored = localStorage.getItem(LEGEND_KEY); } catch (e) { /* ignore */ }
+  setCollapsed(stored !== null ? stored === '1' : window.matchMedia('(max-width: 640px)').matches, false);
+  toggle.addEventListener('click', () => setCollapsed(!div.classList.contains('collapsed'), true));
 
   // Wire each checkbox to add/remove its layer.
   div.querySelectorAll('input[data-cat]').forEach((box) => {

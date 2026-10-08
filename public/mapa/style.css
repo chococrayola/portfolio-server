@@ -48,8 +48,10 @@ body {
   bottom: 0;
 }
 .layout {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 100vh;
+  height: 100dvh; /* tracks the iPhone/iPad Safari toolbar so the bottom isn't clipped */
   display: flex;
   flex-direction: column;
 }
@@ -87,6 +89,11 @@ body {
   border-top: 11px solid var(--pin-color, #888);
 }
 
+/* Smaller pins when zoomed out so they don't pile up (anchored at the tip). */
+.pin { transform-origin: 50% 100%; transition: transform 0.15s; }
+.pins-sm .pin { transform: scale(0.8); }
+.pins-xs .pin { transform: scale(0.58); }
+
 /* Visited pins: muted so unvisited spots pop, plus a green ✓ badge. */
 .pin.visited .pin-bubble { filter: grayscale(0.55); opacity: 0.9; }
 .pin-check {
@@ -117,14 +124,34 @@ body {
   font-size: 0.9rem;
   max-width: 220px;
 }
+.legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
 .legend-head {
   font-weight: 800;
-  margin-bottom: 8px;
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--accent);
 }
+.legend-chevron { color: var(--accent); transition: transform 0.15s; }
+.legend.collapsed .legend-chevron { transform: rotate(-90deg); }
+.legend-body { margin-top: 8px; }
+.legend.collapsed .legend-body { display: none; }
+.legend.collapsed { padding: 4px 10px; }
 .legend-row {
   display: flex;
   align-items: center;
@@ -213,12 +240,14 @@ body {
   padding: 8px 10px;
   font-size: 0.88rem;
 }
-.btn-directions {
+/* Prefixed with .leaflet-container so these beat Leaflet's own
+   `.leaflet-container a { color: #0078a8 }` (blue-on-gold was unreadable). */
+.leaflet-container .btn-directions {
   background: var(--accent);
   color: #0f1720;
 }
 .btn-directions:hover { filter: brightness(1.08); }
-.btn-view {
+.leaflet-container .btn-view {
   background: var(--panel-2);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -246,7 +275,17 @@ body {
 }
 
 /* Mobile tweaks */
-@media (max-width: 520px) {
-  .legend { max-width: 170px; font-size: 0.82rem; padding: 8px 10px; }
-  .topbar .subtitle { width: 100%; }
+@media (max-width: 640px) {
+  /* Compact header: one title line + counts; the subtitle just repeats the title. */
+  .topbar { padding: 6px 12px; gap: 2px 10px; align-items: center; }
+  .topbar .brand { font-size: 1rem; }
+  .topbar .subtitle { display: none; }
+  .topbar .count { font-size: 0.78rem; }
+
+  .legend { max-width: 190px; font-size: 0.85rem; padding: 6px 10px; }
+  .legend-row { padding: 6px 0; } /* bigger touch targets */
+
+  /* Tall popups scroll instead of running off the screen; touch-size buttons. */
+  .leaflet-popup-content { max-height: 55vh; max-height: 55dvh; overflow-y: auto; }
+  .btn-directions, .btn-view, .btn-visited { min-height: 44px; display: flex; align-items: center; justify-content: center; }
 }
