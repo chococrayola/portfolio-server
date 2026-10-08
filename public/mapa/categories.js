@@ -10,6 +10,7 @@ export const CATEGORIES = {
   lago:      { label: 'Lagos / Lagunas',    emoji: '🌊', color: '#0077b6' },
   sendero:   { label: 'Senderos',           emoji: '🥾', color: '#9c6644' },
   turistico: { label: 'Lugares turísticos', emoji: '📸', color: '#e76f51' },
+  museo:     { label: 'Museos',             emoji: '🏛️', color: '#8e6bbf' },
 };
 
 // Fallback used if a place references an unknown category.
