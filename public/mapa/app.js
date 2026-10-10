@@ -2,8 +2,9 @@
 // Built on Leaflet (loaded globally as `L` from the CDN in mapa.html) +
 // free OpenStreetMap tiles. No API key required.
 
-import { CATEGORIES, getCategory } from './categories.js';
-import { PLACES } from './places.js';
+// Keep the ?v= in sync with mapa.html (bump on every change to these files).
+import { CATEGORIES, getCategory } from './categories.js?v=4';
+import { PLACES } from './places.js?v=4';
 
 // --- Map setup -------------------------------------------------------------
 
@@ -29,10 +30,45 @@ const map = L.map('map', {
 // Start with the whole island in view (zoom 9 was wider than a phone screen).
 map.fitBounds([[17.85, -67.3], [18.55, -65.2]], { padding: [8, 8] });
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// One host (no a/b/c subdomains): OSM serves HTTP/2, so a single connection is
+// faster than opening three separate TLS connections.
+const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   maxZoom: 19,
+  keepBuffer: 1,
+  updateWhenIdle: true,
 }).addTo(map);
+
+// --- Loading / slow-connection feedback ------------------------------------
+
+const loadingEl = document.getElementById('map-loading');
+const warnEl = document.getElementById('tile-warning');
+let tileErrors = 0;
+let tilesLoaded = 0;
+function mapIsReady() {
+  window.__mapReady = true;
+  if (loadingEl) loadingEl.hidden = true;
+}
+// Pins/legend work without the base map, so hide the spinner on the first
+// tile OR once the app has drawn (whichever comes first).
+tiles.on('tileload', () => {
+  tilesLoaded++;
+  tileErrors = 0;
+  if (warnEl) warnEl.hidden = true;
+  mapIsReady();
+});
+tiles.on('tileerror', () => {
+  tileErrors++;
+  if (tileErrors >= 3 && tilesLoaded === 0 && warnEl) warnEl.hidden = false;
+});
+const retryBtn = document.getElementById('tile-retry');
+if (retryBtn) {
+  retryBtn.addEventListener('click', () => {
+    tileErrors = 0;
+    if (warnEl) warnEl.hidden = true;
+    tiles.redraw();
+  });
+}
 
 // --- "Visited" state -------------------------------------------------------
 // Which places you've already been to. Stored on your device (localStorage)
@@ -330,3 +366,7 @@ function updateCounter() {
   if (el) el.textContent = String(visited.size);
 }
 updateCounter();
+
+// App is drawn: pins, legend and counters exist. Hide the spinner now; the base
+// map tiles keep streaming in underneath.
+mapIsReady();

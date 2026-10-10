@@ -7,11 +7,20 @@
   <title>Mapa de Naturaleza · Puerto Rico</title>
   <meta name="description" content="Mapa interactivo de playas, ríos, charcas, lagos, senderos y lugares turísticos de Puerto Rico para fotografía de naturaleza y macro." />
 
+  <!-- Start the map-tile connection while the scripts download. -->
+  <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin />
+
+  <!-- Download the module chain in parallel instead of one file after another
+       (app.js -> categories.js + places.js). The ?v= must match the imports in
+       app.js; bump it whenever any of these files change so a new deploy never
+       mixes with older cached copies. -->
+  <link rel="modulepreload" href="mapa/app.js?v=4" />
+  <link rel="modulepreload" href="mapa/categories.js?v=4" />
+  <link rel="modulepreload" href="mapa/places.js?v=4" />
+
   <!-- Leaflet (vendored locally — free, no API key, no external CDN) -->
   <link rel="stylesheet" href="mapa/vendor/leaflet.css" />
-  <script src="mapa/vendor/leaflet.js"></script>
-
-  <link rel="stylesheet" href="mapa/style.css" />
+  <link rel="stylesheet" href="mapa/style.css?v=4" />
 </head>
 <body>
   <div class="layout">
@@ -22,8 +31,33 @@
     </header>
 
     <div id="map"></div>
+
+    <!-- Shown until the map is ready, so a slow connection doesn't look broken. -->
+    <div id="map-loading" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="map-loading-text">Cargando mapa…</div>
+      <button type="button" id="map-reload" hidden>Recargar</button>
+    </div>
+    <div id="tile-warning" role="status" hidden>
+      Mapa base lento o sin conexión.
+      <button type="button" id="tile-retry">Reintentar</button>
+    </div>
   </div>
 
-  <script type="module" src="mapa/app.js"></script>
+  <script src="mapa/vendor/leaflet.js"></script>
+  <script>
+    // If the app hasn't started after a while, say so (and offer a reload)
+    // instead of leaving a spinner forever.
+    window.setTimeout(function () {
+      if (window.__mapReady) return;
+      var t = document.getElementById('map-loading-text');
+      if (t) t.textContent = typeof L === 'undefined'
+        ? 'No se pudo cargar el mapa. Revisa tu conexión.'
+        : 'Está tardando más de lo normal…';
+      var r = document.getElementById('map-reload');
+      if (r) { r.hidden = false; r.onclick = function () { location.reload(); }; }
+    }, 10000);
+  </script>
+  <script type="module" src="mapa/app.js?v=4"></script>
 </body>
 </html>
