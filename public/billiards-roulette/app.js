@@ -12,11 +12,17 @@ const STORAGE = {
   defaultsVersion: 'br.defaultsVersion',
 };
 
-/* Bump this when new options are added to DEFAULT_WHEELS, and tag those
- * entries with `since: <the new number>`. A device that already has its own
- * saved lists then picks up just the newly tagged options on next load —
- * options it deleted stay deleted, and its renames are left alone. */
-const DEFAULTS_VERSION = 2;
+/* Bump this when the default options change. New options get tagged with
+ * `since: <the new number>` in DEFAULT_WHEELS; removed ones get a line in
+ * RETIRED_DEFAULTS with the same number. A device that already has its own
+ * saved lists applies just those changes, once, on next load — options it
+ * deleted stay deleted, and anything it renamed is left alone. */
+const DEFAULTS_VERSION = 3;
+
+/* Options taken out of the defaults. Matched by name only, so an option
+ * the user renamed survives, and a device that re-adds one after the
+ * change keeps it. */
+const RETIRED_DEFAULTS = [{ wheel: 'game', name: 'Bank Pool', since: 3 }];
 const HISTORY_LIMIT = 30;
 const NAME_MAX = 40;
 const TITLE_MAX = 30;
@@ -41,7 +47,6 @@ const DEFAULT_WHEELS = [
       '10-Ball',
       'Enchulao',
       'One-Pocket',
-      'Bank Pool',
     ]),
   },
   {
@@ -191,6 +196,11 @@ function loadWheels() {
       if ((d.since || 1) <= seenVersion) continue;
       const already = entries.some((e) => e.id === d.id || e.name.toLowerCase() === d.name.toLowerCase());
       if (!already) entries.push(plainEntry(d));
+    }
+    for (const r of RETIRED_DEFAULTS) {
+      if (r.wheel !== def.id || r.since <= seenVersion) continue;
+      const i = entries.findIndex((e) => e.name.toLowerCase() === r.name.toLowerCase());
+      if (i >= 0) entries.splice(i, 1);
     }
     const ids = new Set(entries.map((e) => e.id));
     return {

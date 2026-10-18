@@ -85,7 +85,8 @@ Saved lists always win over the defaults, so a device that has been used
 before never loses its own edits when the code changes. To push a *new*
 option out to devices that already have saved lists, add it to
 `DEFAULT_WHEELS` tagged `{ name: '...', since: N }` and bump
-`DEFAULTS_VERSION` to the same `N`. Each device appends the newly tagged
-options once and nothing else: options it deleted stay deleted, and renamed
+`DEFAULTS_VERSION` to the same `N`; to take one out, delete it and add it
+to `RETIRED_DEFAULTS` with that `N`. Each device applies those changes
+once and nothing else: options it deleted stay deleted, and renamed
 or reordered lists are untouched. Renaming an existing default only reaches
 a device through that wheel's "Reset this wheel to defaults" button.
